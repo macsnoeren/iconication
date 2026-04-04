@@ -2,28 +2,42 @@
 """
 Iconication AI Worker
 ─────────────────────
-Haalt pending jobs op via de PHP API, genereert een decision tree met een LLM,
-en stuurt het resultaat terug. Stopt daarna — geen daemon, geen server.
+Polt de PHP webapplicatie op pending jobs, genereert een decision tree met een LLM,
+en stuurt het resultaat terug. Blijft draaien totdat je Ctrl+C drukt.
 
 Gebruik:
     python worker.py
-
-Via cron (elke 5 minuten):
-    */5 * * * * cd /pad/naar/ai_service && python worker.py >> worker.log 2>&1
+    python worker.py --config /pad/naar/config.ini
 """
 
-import os
 import sys
 import json
 import re
+import time
+import argparse
+import configparser
+from pathlib import Path
+
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+# ─── Config laden ────────────────────────────────────────────────────────────
 
-PHP_APP_URL  = os.environ.get("PHP_APP_URL", "").rstrip("/")
-API_KEY      = os.environ.get("ICONICATION_API_KEY", "")
-AI_PROVIDER  = os.environ.get("AI_PROVIDER", "anthropic").lower()
+def load_config(path: str) -> configparser.ConfigParser:
+    cfg = configparser.ConfigParser()
+    if not Path(path).exists():
+        sys.exit(
+            f"FOUT: Config bestand niet gevonden: {path}\n"
+            f"Kopieer config.ini.example naar config.ini en vul de waarden in."
+        )
+    cfg.read(path, encoding="utf-8")
+    return cfg
+
+
+def get(cfg: configparser.ConfigParser, section: str, key: str, fallback: str = "") -> str:
+    return cfg.get(section, key, fallback=fallback).strip()
+
+
+# ─── Prompt ──────────────────────────────────────────────────────────────────
 
 PROMPT_TEMPLATE = """Je bent een specialist in augmentatieve en alternatieve communicatie (AAC).
 Maak een decision tree voor communicatie met een gebruiker over het onderwerp: "{topic}"
@@ -63,78 +77,85 @@ Node 1 is altijd de root node. next_node_id is null als het een eindpunt is.
 Gebruik opeenvolgende integer IDs beginnend bij 1."""
 
 
-def _check_config() -> None:
-    if not PHP_APP_URL:
-        sys.exit("FOUT: PHP_APP_URL is niet ingesteld in .env")
-    if not API_KEY:
-        sys.exit("FOUT: ICONICATION_API_KEY is niet ingesteld in .env")
-
-
-def _headers() -> dict:
-    return {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
-
-def fetch_pending_jobs() -> list:
-    url = f"{PHP_APP_URL}?action=api_pending_jobs"
-    try:
-        resp = requests.get(url, headers=_headers(), timeout=10)
-        resp.raise_for_status()
-        return resp.json()
-    except requests.RequestException as e:
-        sys.exit(f"FOUT: Kan PHP app niet bereiken ({url}): {e}")
-
-
-def submit_result(job_id: int, result: dict) -> None:
-    url = f"{PHP_APP_URL}?action=api_submit_result"
-    requests.post(url, headers=_headers(), json={"job_id": job_id, "result": result}, timeout=10)
-
-
-def submit_error(job_id: int, error: str) -> None:
-    url = f"{PHP_APP_URL}?action=api_submit_result"
-    requests.post(url, headers=_headers(), json={"job_id": job_id, "error": error}, timeout=10)
-
-
 def build_prompt(topic: str, goal: str) -> str:
     goal_line = f"Doel: {goal}" if goal.strip() else ""
     return PROMPT_TEMPLATE.format(topic=topic, goal_line=goal_line)
 
 
-def generate_with_anthropic(topic: str, goal: str) -> dict:
+# ─── HTTP helpers ─────────────────────────────────────────────────────────────
+
+def headers(api_key: str) -> dict:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
+def fetch_pending_jobs(php_url: str, api_key: str) -> list:
+    resp = requests.get(
+        f"{php_url}?action=api_pending_jobs",
+        headers=headers(api_key),
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def submit_result(php_url: str, api_key: str, job_id: int, result: dict) -> None:
+    requests.post(
+        f"{php_url}?action=api_submit_result",
+        headers=headers(api_key),
+        json={"job_id": job_id, "result": result},
+        timeout=10,
+    )
+
+
+def submit_error(php_url: str, api_key: str, job_id: int, error: str) -> None:
+    requests.post(
+        f"{php_url}?action=api_submit_result",
+        headers=headers(api_key),
+        json={"job_id": job_id, "error": error},
+        timeout=10,
+    )
+
+
+# ─── AI generatie ─────────────────────────────────────────────────────────────
+
+def generate_with_anthropic(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
     try:
         import anthropic
     except ImportError:
         raise RuntimeError("anthropic pakket niet gevonden. Voer: pip install anthropic")
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is niet ingesteld in .env")
+    api_key = get(cfg, "ai", "anthropic_api_key")
+    if not api_key or api_key.startswith("sk-ant-..."):
+        raise RuntimeError("anthropic_api_key is niet ingesteld in config.ini")
 
+    model = get(cfg, "ai", "anthropic_model", "claude-haiku-4-5-20251001")
     client = anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
-        model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+        model=model,
         max_tokens=2048,
         messages=[{"role": "user", "content": build_prompt(topic, goal)}],
     )
     return parse_and_validate(message.content[0].text)
 
 
-def generate_with_openai(topic: str, goal: str) -> dict:
+def generate_with_openai(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
     try:
         from openai import OpenAI
     except ImportError:
         raise RuntimeError("openai pakket niet gevonden. Voer: pip install openai")
 
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENAI_API_KEY is niet ingesteld in .env")
+    api_key = get(cfg, "ai", "openai_api_key")
+    if not api_key or api_key.startswith("sk-..."):
+        raise RuntimeError("openai_api_key is niet ingesteld in config.ini")
 
+    model = get(cfg, "ai", "openai_model", "gpt-4o-mini")
     client = OpenAI(api_key=api_key)
     response = client.chat.completions.create(
-        model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+        model=model,
         messages=[{"role": "user", "content": build_prompt(topic, goal)}],
         response_format={"type": "json_object"},
     )
@@ -156,8 +177,7 @@ def parse_and_validate(content: str) -> dict:
     node_ids = {n["id"] for n in data["nodes"]}
     for node in data["nodes"]:
         for opt_key in ("option_a", "option_b"):
-            opt = node[opt_key]
-            next_id = opt.get("next_node_id")
+            next_id = node[opt_key].get("next_node_id")
             if next_id is not None and next_id not in node_ids:
                 raise ValueError(
                     f"Node {node['id']} verwijst naar onbekende next_node_id {next_id}"
@@ -165,41 +185,68 @@ def parse_and_validate(content: str) -> dict:
     return data
 
 
-def process_job(job: dict) -> None:
-    job_id = job["id"]
-    topic  = job["topic"]
-    goal   = job.get("goal", "")
+# ─── Job verwerking ──────────────────────────────────────────────────────────
 
-    print(f"  → Verwerken job #{job_id}: '{topic}'")
+def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job: dict) -> None:
+    job_id   = job["id"]
+    topic    = job["topic"]
+    goal     = job.get("goal", "")
+    provider = get(cfg, "ai", "provider", "anthropic").lower()
+
+    print(f"  → Job #{job_id}: '{topic}'")
     try:
-        if AI_PROVIDER == "openai":
-            result = generate_with_openai(topic, goal)
+        if provider == "openai":
+            result = generate_with_openai(cfg, topic, goal)
         else:
-            result = generate_with_anthropic(topic, goal)
+            result = generate_with_anthropic(cfg, topic, goal)
 
-        submit_result(job_id, result)
-        print(f"  ✓ Job #{job_id} succesvol verwerkt ({len(result['nodes'])} nodes)")
+        submit_result(php_url, api_key, job_id, result)
+        print(f"  ✓ Job #{job_id} klaar ({len(result['nodes'])} nodes)")
     except Exception as e:
-        error_msg = str(e)
-        submit_error(job_id, error_msg)
-        print(f"  ✗ Job #{job_id} mislukt: {error_msg}")
+        submit_error(php_url, api_key, job_id, str(e))
+        print(f"  ✗ Job #{job_id} mislukt: {e}")
 
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    _check_config()
+    parser = argparse.ArgumentParser(description="Iconication AI Worker")
+    parser.add_argument("--config", default="config.ini", help="Pad naar config bestand")
+    args = parser.parse_args()
 
-    print(f"Iconication Worker — {PHP_APP_URL}")
-    jobs = fetch_pending_jobs()
+    cfg = load_config(args.config)
 
-    if not jobs:
-        print("Geen pending jobs gevonden.")
-        return
+    php_url  = get(cfg, "app", "php_app_url").rstrip("/")
+    api_key  = get(cfg, "app", "api_key")
+    interval = int(get(cfg, "app", "poll_interval", "10"))
+    provider = get(cfg, "ai", "provider", "anthropic")
 
-    print(f"{len(jobs)} job(s) gevonden.")
-    for job in jobs:
-        process_job(job)
+    if not php_url:
+        sys.exit("FOUT: php_app_url is niet ingesteld in config.ini")
+    if not api_key:
+        sys.exit("FOUT: api_key is niet ingesteld in config.ini")
 
-    print("Klaar.")
+    print(f"Iconication Worker gestart — {php_url}")
+    print(f"Poll-interval: {interval}s  |  Provider: {provider}  |  Ctrl+C om te stoppen\n")
+
+    try:
+        while True:
+            try:
+                jobs = fetch_pending_jobs(php_url, api_key)
+                if jobs:
+                    print(f"[poll] {len(jobs)} job(s) gevonden.")
+                    for job in jobs:
+                        process_job(cfg, php_url, api_key, job)
+                else:
+                    print(f"[poll] Geen jobs. Wachten {interval}s...", end="\r", flush=True)
+            except requests.RequestException as e:
+                print(f"[poll] Verbindingsfout: {e}")
+            except Exception as e:
+                print(f"[poll] Fout: {e}")
+
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nWorker gestopt.")
 
 
 if __name__ == "__main__":

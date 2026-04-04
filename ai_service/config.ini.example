@@ -1,0 +1,21 @@
+[app]
+# URL van de PHP webapplicatie (zonder trailing slash)
+php_app_url = http://localhost/iconication/public/index.php
+
+# API key — kopieer deze uit het Admin-paneel van de webapplicatie
+api_key =
+
+# Poll-interval in seconden
+poll_interval = 10
+
+[ai]
+# Provider: anthropic of openai
+provider = anthropic
+
+# Anthropic (Claude) — https://console.anthropic.com/
+anthropic_api_key = sk-ant-...
+# anthropic_model = claude-haiku-4-5-20251001
+
+# OpenAI — https://platform.openai.com/
+# openai_api_key = sk-...
+# openai_model = gpt-4o-mini

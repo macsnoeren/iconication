@@ -22,8 +22,8 @@ $apiKey = Config::getApiKey();
         <div style="background:#f8f8f8; border-radius:8px; padding:12px 16px; font-size:0.82rem; color:#444; font-family:monospace;">
             cd ai_service<br>
             pip install -r requirements.txt<br>
-            cp .env.example .env &nbsp;<span style="color:#888"># vul keys in</span><br>
-            python worker.py
+            cp config.ini.example config.ini &nbsp;<span style="color:#888"># vul keys in</span><br>
+            python worker.py &nbsp;<span style="color:#888"># blijft draaien, polt elke 10s</span>
         </div>
     </div>
 </details>
