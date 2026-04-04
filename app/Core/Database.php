@@ -39,6 +39,7 @@ class Database {
             
             // Node 1: Hoofdkiezen
             $db->exec("INSERT INTO options (node_id, label, image_url, next_node_id) VALUES 
+                (1, 'Start', 'https://cdn-icons-png.flaticon.com/512/1046/1046771.png', 1),
                 (1, 'Ik wil eten', 'https://cdn-icons-png.flaticon.com/512/1046/1046771.png', 2),
                 (1, 'Ik wil drinken', 'https://cdn-icons-png.flaticon.com/512/3100/3100557.png', 3)");
             

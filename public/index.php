@@ -58,6 +58,13 @@ if ($action === 'back' && $topicId) {
     $admin = new AdminController();
     if ($action === 'admin') $admin->index();
     if ($action === 'admin_topic_delete' && $topicId) $admin->deleteTopic($topicId);
+    if ($action === 'admin_add_topic') $admin->addTopic();
+    if ($action === 'admin_save_topic') $admin->saveTopic();
+    if ($action === 'admin_topic_nodes' && $topicId) $admin->showTopicNodes($topicId);
+    if ($action === 'admin_add_node' && $topicId) $admin->addNode($topicId);
+    if ($action === 'admin_edit_node' && $topicId && $nodeId) $admin->editNode($topicId, $nodeId);
+    if ($action === 'admin_save_node' && $topicId) $admin->saveNode($topicId, $nodeId); // nodeId kan null zijn voor nieuwe node
+    if ($action === 'admin_delete_node' && $topicId && $nodeId) $admin->deleteNode($topicId, $nodeId);
 } elseif ($topicId) {
     $controller->start($topicId);
 } elseif (empty($_GET)) {
