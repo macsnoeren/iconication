@@ -44,8 +44,6 @@ if ($action === 'back' && $topicId) {
     $controller->back($topicId);
 } elseif ($action === 'reset' && $topicId) {
     $controller->reset($topicId);
-} elseif ($topicId && $nodeId) {
-    $controller->showNode($topicId, $nodeId);
 } elseif ($action === 'setup') {
     (new AuthController())->setup();
 } elseif ($action === 'login') {
@@ -80,6 +78,8 @@ if ($action === 'back' && $topicId) {
         header("Location: " . BASE_URL . "?action=admin");
         exit;
     }
+} elseif ($topicId && $nodeId) {
+    $controller->showNode($topicId, $nodeId);
 } elseif ($topicId) {
     $controller->start($topicId);
 } elseif (empty($_GET)) {
