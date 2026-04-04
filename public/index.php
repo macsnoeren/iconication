@@ -52,6 +52,8 @@ if ($action === 'back' && $topicId) {
     (new AuthController())->login();
 } elseif ($action === 'logout') {
     (new AuthController())->logout();
+} elseif ($action === 'change_password') {
+    (new AuthController())->changePassword();
 } elseif (strpos($action ?? '', 'admin') === 0) {
     $admin = new AdminController();
     if ($action === 'admin') $admin->index();

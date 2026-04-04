@@ -66,4 +66,40 @@ class AuthController {
         header("Location: " . BASE_URL);
         exit;
     }
+
+    public function changePassword(): void {
+        if (!isset($_SESSION['user_id'])) {
+            header("Location: " . BASE_URL . "?action=login");
+            exit;
+        }
+
+        $error = null;
+        $success = null;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $currentPassword = $_POST['current_password'] ?? '';
+            $newPassword = $_POST['new_password'] ?? '';
+            $confirmPassword = $_POST['confirm_password'] ?? '';
+
+            if ($newPassword !== $confirmPassword) {
+                $error = "Nieuwe wachtwoorden komen niet overeen.";
+            } else {
+                $stmt = $this->db->prepare("SELECT password FROM users WHERE id = ?");
+                $stmt->execute([$_SESSION['user_id']]);
+                $user = $stmt->fetch();
+
+                if ($user && password_verify($currentPassword, $user['password'])) {
+                    $hashed = password_hash($newPassword, PASSWORD_DEFAULT);
+                    $updateStmt = $this->db->prepare("UPDATE users SET password = ? WHERE id = ?");
+                    $updateStmt->execute([$hashed, $_SESSION['user_id']]);
+                    $success = "Wachtwoord succesvol gewijzigd.";
+                } else {
+                    $error = "Huidig wachtwoord is onjuist.";
+                }
+            }
+        }
+
+        $view = 'change_password';
+        include __DIR__ . "/../../views/layout.php";
+    }
 }

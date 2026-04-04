@@ -33,8 +33,11 @@
         </div>
         <div>
             <a href="<?= BASE_URL ?>" class="btn">🏠 Home</a>
-            <?php if(isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
-                <a href="<?= BASE_URL ?>?action=admin" class="btn" style="background:#2ecc71">⚙ Admin</a>
+            <?php if(isset($_SESSION['user_id'])): ?>
+                <a href="<?= BASE_URL ?>?action=change_password" class="btn" style="background:#9b59b6">🔑 Wachtwoord</a>
+                <?php if($_SESSION['role'] === 'admin'): ?>
+                    <a href="<?= BASE_URL ?>?action=admin" class="btn" style="background:#2ecc71">⚙ Admin</a>
+                <?php endif; ?>
                 <a href="<?= BASE_URL ?>?action=logout" class="btn" style="background:#e74c3c">Uitloggen</a>
             <?php else: ?>
                 <a href="<?= BASE_URL ?>?action=login" class="btn">Inloggen</a>
