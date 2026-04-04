@@ -164,4 +164,12 @@ class AdminController {
         header("Location: " . BASE_URL . "?action=admin_topic_nodes&topic=$topicId");
         exit;
     }
+
+    public function getExistingImages(): void {
+        $stmt = $this->db->query("SELECT DISTINCT image_url FROM options WHERE image_url IS NOT NULL AND image_url != '' ORDER BY label ASC");
+        $images = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        header('Content-Type: application/json');
+        echo json_encode($images);
+        exit;
+    }
 }

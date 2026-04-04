@@ -72,6 +72,8 @@ if ($action === 'back' && $topicId) {
         $admin->saveNode($topicId, $nodeId);
     } elseif ($action === 'admin_delete_node' && $topicId && $nodeId) {
         $admin->deleteNode($topicId, $nodeId);
+    } elseif ($action === 'admin_get_images') {
+        $admin->getExistingImages();
     } else {
         // Als een admin actie is aangevraagd maar niet specifiek gematcht,
         // redirect naar het admin dashboard om doorvallen te voorkomen.
