@@ -59,7 +59,7 @@ if ($action === 'back' && $topicId) {
     if ($action === 'admin') $admin->index();
     if ($action === 'admin_topic_delete' && $topicId) $admin->deleteTopic($topicId);
     if ($action === 'admin_add_topic') $admin->addTopic();
-    if ($action === 'admin_save_topic') $admin->saveTopic();
+    if ($action === 'admin_save_topic') $admin->saveTopic($topicId);
     if ($action === 'admin_topic_nodes' && $topicId) $admin->showTopicNodes($topicId);
     if ($action === 'admin_add_node' && $topicId) $admin->addNode($topicId);
     if ($action === 'admin_edit_node' && $topicId && $nodeId) $admin->editNode($topicId, $nodeId);

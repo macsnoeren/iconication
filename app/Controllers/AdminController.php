@@ -49,6 +49,7 @@ class AdminController {
     public function saveTopic(?int $topicId = null): void {
         $name = $_POST['name'] ?? '';
         $rootNodeId = $_POST['root_node_id'] ?? null;
+        $rootNodeId = ($rootNodeId !== '' && $rootNodeId !== null) ? (int)$rootNodeId : null;
 
         if (empty($name)) {
             // Error handling
@@ -136,9 +137,9 @@ class AdminController {
             $label = $optionLabels[$i] ?? '';
             $image = $optionImages[$i] ?? '';
             $nextNode = ($optionNextNodes[$i] !== '' && $optionNextNodes[$i] !== null) ? (int)$optionNextNodes[$i] : null;
-            $optionId = $optionIds[$i] ?? null;
+            $optionId = !empty($optionIds[$i]) ? (int)$optionIds[$i] : null;
 
-            if ($optionId) {
+            if ($optionId !== null) {
                 $stmt = $this->db->prepare("UPDATE options SET label = ?, image_url = ?, next_node_id = ? WHERE id = ?");
                 $stmt->execute([$label, $image, $nextNode, $optionId]);
             } else {

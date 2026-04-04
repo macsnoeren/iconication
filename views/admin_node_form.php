@@ -3,7 +3,7 @@
     <form method="POST" action="<?= BASE_URL ?>?action=admin_save_node&topic=<?= $node['topic_id'] ?><?= $node['id'] ? '&node=' . $node['id'] : '' ?>">
         
         <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-            <div style="flex: 1; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa;">
+            <div style="flex: 1 1 0; min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; box-sizing: border-box;">
                 <h3 style="margin-top: 0;">Optie 1</h3>
                 <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($options[0]['id'] ?? '')) ?>">
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Label:</label>
@@ -19,7 +19,7 @@
                        style="width:100%; box-sizing: border-box; padding:10px; border: 1px solid #ccc; border-radius: 5px;">
             </div>
 
-            <div style="flex: 1; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa;">
+            <div style="flex: 1 1 0; min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; box-sizing: border-box;">
                 <h3 style="margin-top: 0;">Optie 2</h3>
                 <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($options[1]['id'] ?? '')) ?>">
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Label:</label>
