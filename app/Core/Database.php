@@ -31,13 +31,6 @@ class Database {
         $db->exec("CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER, label TEXT, image_url TEXT, next_node_id INTEGER)");
         $db->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)");
 
-        // Standaard admin aanmaken als er geen gebruikers zijn
-        $userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
-        if ($userCount == 0) {
-            $password = password_hash('admin123', PASSWORD_DEFAULT);
-            $db->exec("INSERT INTO users (username, password, role) VALUES ('admin', '$password', 'admin')");
-        }
-
         // Seed data if empty
         $count = $db->query("SELECT COUNT(*) FROM topics")->fetchColumn();
         if ($count == 0) {

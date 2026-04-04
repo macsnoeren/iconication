@@ -31,12 +31,23 @@ $topicId = isset($_GET['topic']) ? (int)$_GET['topic'] : null;
 $nodeId = isset($_GET['node']) ? (int)$_GET['node'] : null;
 $action = $_GET['action'] ?? null;
 
+// Check of er users zijn. Zo niet, forceer setup.
+$db = \App\Core\Database::getConnection();
+$userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+
+if ($userCount == 0 && $action !== 'setup') {
+    header("Location: " . BASE_URL . "?action=setup");
+    exit;
+}
+
 if ($action === 'back' && $topicId) {
     $controller->back($topicId);
 } elseif ($action === 'reset' && $topicId) {
     $controller->reset($topicId);
 } elseif ($topicId && $nodeId) {
     $controller->showNode($topicId, $nodeId);
+} elseif ($action === 'setup') {
+    (new AuthController())->setup();
 } elseif ($action === 'login') {
     (new AuthController())->login();
 } elseif ($action === 'logout') {

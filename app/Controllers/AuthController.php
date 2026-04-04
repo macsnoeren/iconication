@@ -12,6 +12,31 @@ class AuthController {
         $this->db = Database::getConnection();
     }
 
+    public function setup(): void {
+        $userCount = $this->db->query("SELECT COUNT(*) FROM users")->fetchColumn();
+        if ($userCount > 0) {
+            header("Location: " . BASE_URL . "?action=login");
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $username = $_POST['username'] ?? '';
+            $password = $_POST['password'] ?? '';
+            
+            if ($username && $password) {
+                $hashed = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $this->db->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, 'admin')");
+                $stmt->execute([$username, $hashed]);
+                
+                header("Location: " . BASE_URL . "?action=login");
+                exit;
+            }
+        }
+
+        $view = 'setup';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
     public function login(): void {
         $error = null;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
