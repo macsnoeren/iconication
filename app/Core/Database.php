@@ -28,7 +28,9 @@ class Database {
         $db = self::$instance;
         $db->exec("CREATE TABLE IF NOT EXISTS topics (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, root_node_id INTEGER)");
         $db->exec("CREATE TABLE IF NOT EXISTS nodes (id INTEGER PRIMARY KEY AUTOINCREMENT, topic_id INTEGER)");
-        $db->exec("CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER, label TEXT, image_url TEXT, next_node_id INTEGER)");
+        $db->exec("CREATE TABLE IF NOT EXISTS options (id INTEGER PRIMARY KEY AUTOINCREMENT, node_id INTEGER, label TEXT, image_url TEXT, image_hint TEXT, next_node_id INTEGER)");
+        // Migreer bestaande databases die image_hint nog niet hebben
+        try { $db->exec("ALTER TABLE options ADD COLUMN image_hint TEXT"); } catch (\Exception $e) { /* kolom bestaat al */ }
         $db->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)");
 
         // Seed data if empty

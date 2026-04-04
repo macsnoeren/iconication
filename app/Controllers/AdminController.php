@@ -172,4 +172,156 @@ class AdminController {
         echo json_encode($images);
         exit;
     }
+
+    // ─── AI generatie ────────────────────────────────────────────────────────
+
+    /** Toon het formulier om een nieuw onderwerp via AI te genereren. */
+    public function aiGenerateTopic(): void {
+        $view = 'admin_ai_generate';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    /** Stuur het onderwerp naar de Python AI-service en toon een preview. */
+    public function aiPreviewTopic(): void {
+        $topic = trim($_POST['topic'] ?? '');
+
+        if ($topic === '') {
+            $_SESSION['ai_error'] = 'Voer een onderwerp in.';
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+        if (mb_strlen($topic) > 200) {
+            $_SESSION['ai_error'] = 'Onderwerp is te lang (max 200 tekens).';
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+
+        $serviceUrl = defined('AI_SERVICE_URL') ? AI_SERVICE_URL : 'http://localhost:8000';
+        $payload     = json_encode(['topic' => $topic]);
+
+        $ch = curl_init($serviceUrl . '/generate-topic');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => 5,
+        ]);
+        $response   = curl_exec($ch);
+        $httpCode   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError  = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError !== '') {
+            $_SESSION['ai_error'] = 'Kan de AI-service niet bereiken. Is de Python service gestart? (' . htmlspecialchars($curlError) . ')';
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+
+        $data = json_decode($response, true);
+
+        if ($httpCode !== 200 || $data === null) {
+            $detail = $data['detail'] ?? $response;
+            $_SESSION['ai_error'] = 'AI-service fout: ' . htmlspecialchars((string)$detail);
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+
+        // Sla de ruwe boom op in de sessie zodat het preview-formulier er mee werkt
+        $_SESSION['ai_tree'] = $data;
+
+        $tree = $data;
+        $view = 'admin_ai_preview';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    /** Sla de (eventueel aangepaste) AI-boom op in de database. */
+    public function aiSaveTopic(): void {
+        $topicName = trim($_POST['topic_name'] ?? '');
+        $rawNodes  = $_POST['nodes'] ?? [];
+
+        if ($topicName === '') {
+            $_SESSION['ai_error'] = 'Onderwerpnaam mag niet leeg zijn.';
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+
+        if (empty($rawNodes)) {
+            $_SESSION['ai_error'] = 'Geen nodes ontvangen.';
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+
+        // Sanitize labels
+        $nodes = [];
+        foreach ($rawNodes as $n) {
+            $nodes[] = [
+                'id'       => (int)($n['id'] ?? 0),
+                'option_a' => [
+                    'label'       => mb_substr(trim(htmlspecialchars_decode($n['option_a']['label'] ?? '', ENT_QUOTES)), 0, 100),
+                    'image_hint'  => mb_substr(trim($n['option_a']['image_hint'] ?? ''), 0, 100),
+                    'next_node_id'=> $n['option_a']['next_node_id'] !== '' ? (int)$n['option_a']['next_node_id'] : null,
+                ],
+                'option_b' => [
+                    'label'       => mb_substr(trim(htmlspecialchars_decode($n['option_b']['label'] ?? '', ENT_QUOTES)), 0, 100),
+                    'image_hint'  => mb_substr(trim($n['option_b']['image_hint'] ?? ''), 0, 100),
+                    'next_node_id'=> $n['option_b']['next_node_id'] !== '' ? (int)$n['option_b']['next_node_id'] : null,
+                ],
+            ];
+        }
+
+        $this->db->beginTransaction();
+        try {
+            // 1. Maak het topic aan (root_node_id wordt later bijgewerkt)
+            $stmtTopic = $this->db->prepare("INSERT INTO topics (name, root_node_id) VALUES (?, NULL)");
+            $stmtTopic->execute([htmlspecialchars($topicName, ENT_QUOTES, 'UTF-8')]);
+            $topicId = (int)$this->db->lastInsertId();
+
+            // 2. Maak alle nodes aan en bouw een mapping: temp_id → real_id
+            $idMap = [];
+            foreach ($nodes as $n) {
+                $stmtNode = $this->db->prepare("INSERT INTO nodes (topic_id) VALUES (?)");
+                $stmtNode->execute([$topicId]);
+                $idMap[$n['id']] = (int)$this->db->lastInsertId();
+            }
+
+            // 3. Voeg opties in met vertaalde next_node_ids
+            foreach ($nodes as $n) {
+                $realNodeId = $idMap[$n['id']];
+                foreach (['option_a', 'option_b'] as $optKey) {
+                    $opt        = $n[$optKey];
+                    $nextRealId = ($opt['next_node_id'] !== null && isset($idMap[$opt['next_node_id']]))
+                        ? $idMap[$opt['next_node_id']]
+                        : null;
+                    $stmtOpt = $this->db->prepare(
+                        "INSERT INTO options (node_id, label, image_hint, image_url, next_node_id) VALUES (?, ?, ?, '', ?)"
+                    );
+                    $stmtOpt->execute([
+                        $realNodeId,
+                        htmlspecialchars($opt['label'], ENT_QUOTES, 'UTF-8'),
+                        htmlspecialchars($opt['image_hint'], ENT_QUOTES, 'UTF-8'),
+                        $nextRealId,
+                    ]);
+                }
+            }
+
+            // 4. Stel root_node_id in op de eerste node van de boom (temp id = 1)
+            if (isset($idMap[1])) {
+                $stmtRoot = $this->db->prepare("UPDATE topics SET root_node_id = ? WHERE id = ?");
+                $stmtRoot->execute([$idMap[1], $topicId]);
+            }
+
+            $this->db->commit();
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            $_SESSION['ai_error'] = 'Databasefout bij opslaan: ' . htmlspecialchars($e->getMessage());
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
+
+        unset($_SESSION['ai_tree']);
+        header("Location: " . BASE_URL . "?action=admin_topic_nodes&topic=" . $topicId);
+        exit;
+    }
 }

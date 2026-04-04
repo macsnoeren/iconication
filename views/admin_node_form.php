@@ -17,6 +17,9 @@
             <div style="flex: 1 1 0; min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; box-sizing: border-box;">
                 <h3 style="margin-top: 0;">Optie 1</h3>
                 <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($options[0]['id'] ?? '')) ?>">
+                <?php if (!empty($options[0]['image_hint'])): ?>
+                    <p style="margin: 0 0 10px; font-size: 0.85rem; color: #2980b9;">💡 Afbeelding-hint: <strong><?= htmlspecialchars($options[0]['image_hint']) ?></strong></p>
+                <?php endif; ?>
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Label:</label>
                 <input type="text" name="option_label[]" value="<?= htmlspecialchars($options[0]['label'] ?? '') ?>" required
                        style="width:100%; box-sizing: border-box; padding:10px; margin-bottom:15px; border: 1px solid #ccc; border-radius: 5px;">
@@ -36,6 +39,9 @@
             <div style="flex: 1 1 0; min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; box-sizing: border-box;">
                 <h3 style="margin-top: 0;">Optie 2</h3>
                 <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($options[1]['id'] ?? '')) ?>">
+                <?php if (!empty($options[1]['image_hint'])): ?>
+                    <p style="margin: 0 0 10px; font-size: 0.85rem; color: #2980b9;">💡 Afbeelding-hint: <strong><?= htmlspecialchars($options[1]['image_hint']) ?></strong></p>
+                <?php endif; ?>
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Label:</label>
                 <input type="text" name="option_label[]" value="<?= htmlspecialchars($options[1]['label'] ?? '') ?>" required
                        style="width:100%; box-sizing: border-box; padding:10px; margin-bottom:15px; border: 1px solid #ccc; border-radius: 5px;">

@@ -74,6 +74,12 @@ if ($action === 'back' && $topicId) {
         $admin->deleteNode($topicId, $nodeId);
     } elseif ($action === 'admin_get_images') {
         $admin->getExistingImages();
+    } elseif ($action === 'admin_ai_generate') {
+        $admin->aiGenerateTopic();
+    } elseif ($action === 'admin_ai_preview') {
+        $admin->aiPreviewTopic();
+    } elseif ($action === 'admin_ai_save') {
+        $admin->aiSaveTopic();
     } else {
         // Als een admin actie is aangevraagd maar niet specifiek gematcht,
         // redirect naar het admin dashboard om doorvallen te voorkomen.
