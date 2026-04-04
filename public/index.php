@@ -54,17 +54,32 @@ if ($action === 'back' && $topicId) {
     (new AuthController())->logout();
 } elseif ($action === 'change_password') {
     (new AuthController())->changePassword();
-} elseif (strpos($action ?? '', 'admin') === 0) {
+} elseif (strpos($action ?? '', 'admin') === 0) { // Admin acties
     $admin = new AdminController();
-    if ($action === 'admin') $admin->index();
-    if ($action === 'admin_topic_delete' && $topicId) $admin->deleteTopic($topicId);
-    if ($action === 'admin_add_topic') $admin->addTopic();
-    if ($action === 'admin_save_topic') $admin->saveTopic($topicId);
-    if ($action === 'admin_topic_nodes' && $topicId) $admin->showTopicNodes($topicId);
-    if ($action === 'admin_add_node' && $topicId) $admin->addNode($topicId);
-    if ($action === 'admin_edit_node' && $topicId && $nodeId) $admin->editNode($topicId, $nodeId);
-    if ($action === 'admin_save_node' && $topicId) $admin->saveNode($topicId, $nodeId); // nodeId kan null zijn voor nieuwe node
-    if ($action === 'admin_delete_node' && $topicId && $nodeId) $admin->deleteNode($topicId, $nodeId);
+    if ($action === 'admin') {
+        $admin->index();
+    } elseif ($action === 'admin_topic_delete' && $topicId) {
+        $admin->deleteTopic($topicId);
+    } elseif ($action === 'admin_add_topic') {
+        $admin->addTopic();
+    } elseif ($action === 'admin_save_topic') {
+        $admin->saveTopic($topicId);
+    } elseif ($action === 'admin_topic_nodes' && $topicId) {
+        $admin->showTopicNodes($topicId);
+    } elseif ($action === 'admin_add_node' && $topicId) {
+        $admin->addNode($topicId);
+    } elseif ($action === 'admin_edit_node' && $topicId && $nodeId) {
+        $admin->editNode($topicId, $nodeId);
+    } elseif ($action === 'admin_save_node' && $topicId) { // nodeId kan null zijn voor nieuwe node
+        $admin->saveNode($topicId, $nodeId);
+    } elseif ($action === 'admin_delete_node' && $topicId && $nodeId) {
+        $admin->deleteNode($topicId, $nodeId);
+    } else {
+        // Als een admin actie is aangevraagd maar niet specifiek gematcht,
+        // redirect naar het admin dashboard om doorvallen te voorkomen.
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
+    }
 } elseif ($topicId) {
     $controller->start($topicId);
 } elseif (empty($_GET)) {
