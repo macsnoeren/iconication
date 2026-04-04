@@ -24,10 +24,10 @@
 <body>
     <div class="header">
         <?php if($view !== 'home'): ?>
-            <a href="<?= BASE_PATH ?>/topic/<?= $topicId ?>/back" class="btn">⬅ Terug</a>
+            <a href="<?= BASE_URL ?>?topic=<?= $topicId ?>&action=back" class="btn">⬅ Terug</a>
         <?php endif; ?>
         <div style="font-size: 1.5rem;">Iconication</div>
-        <a href="<?= BASE_PATH ?>/" class="btn">🏠 Home</a>
+        <a href="<?= BASE_URL ?>" class="btn">🏠 Home</a>
     </div>
     <div class="container">
         <?php include __DIR__ . "/$view.php"; ?>
