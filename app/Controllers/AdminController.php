@@ -135,7 +135,7 @@ class AdminController {
         for ($i = 0; $i < 2; $i++) { // We verwachten altijd 2 opties
             $label = $optionLabels[$i] ?? '';
             $image = $optionImages[$i] ?? '';
-            $nextNode = $optionNextNodes[$i] ?? null;
+            $nextNode = ($optionNextNodes[$i] !== '' && $optionNextNodes[$i] !== null) ? (int)$optionNextNodes[$i] : null;
             $optionId = $optionIds[$i] ?? null;
 
             if ($optionId) {
