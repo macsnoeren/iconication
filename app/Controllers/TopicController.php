@@ -24,7 +24,7 @@ class TopicController {
         $rootId = $stmt->fetchColumn();
         
         $_SESSION['history'] = [];
-        header("Location: /topic/$id/node/$rootId");
+        header("Location: " . BASE_PATH . "/topic/$id/node/$rootId");
         exit;
     }
 
@@ -54,15 +54,15 @@ class TopicController {
         if (isset($_SESSION['history']) && count($_SESSION['history']) > 1) {
             array_pop($_SESSION['history']); 
             $prev = array_pop($_SESSION['history']);
-            header("Location: /topic/$topicId/node/$prev");
+            header("Location: " . BASE_PATH . "/topic/$topicId/node/$prev");
         } else {
-            header("Location: /");
+            header("Location: " . BASE_PATH . "/");
         }
         exit;
     }
 
     public function reset(int $topicId): void {
-        header("Location: /topic/$topicId");
+        header("Location: " . BASE_PATH . "/topic/$topicId");
         exit;
     }
 

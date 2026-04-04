@@ -21,6 +21,10 @@ $method = $_SERVER['REQUEST_METHOD'];
 $scriptPath = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
 $uri = substr($requestUri, strlen($scriptPath));
 
+// Definieer de BASE_PATH voor gebruik in links en redirects
+$basePath = ($scriptPath === '/') ? '' : $scriptPath;
+define('BASE_PATH', $basePath);
+
 // Normaliseer de URI: verwijder trailing slashes en zorg voor een slash aan het begin
 $uri = '/' . trim($uri, '/');
 
@@ -41,5 +45,5 @@ if ($uri === '/' || $uri === '/index.php') {
 } else {
     http_response_code(404);
     echo "<h1>404 - Pagina niet gevonden</h1>";
-    echo "<a href='/'>Ga terug naar start</a>";
+    echo "<a href='" . BASE_PATH . "/'>Ga terug naar start</a>";
 }
