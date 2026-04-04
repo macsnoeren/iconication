@@ -22,6 +22,8 @@ $scriptPath = str_replace('\\', '/', dirname($scriptName)); // /iconication/publ
 define('BASE_URL', $scriptName); // /iconication/public/index.php
 
 use App\Controllers\TopicController;
+use App\Controllers\AuthController;
+use App\Controllers\AdminController;
 $controller = new TopicController();
 
 // Routing op basis van GET variabelen
@@ -35,6 +37,14 @@ if ($action === 'back' && $topicId) {
     $controller->reset($topicId);
 } elseif ($topicId && $nodeId) {
     $controller->showNode($topicId, $nodeId);
+} elseif ($action === 'login') {
+    (new AuthController())->login();
+} elseif ($action === 'logout') {
+    (new AuthController())->logout();
+} elseif (strpos($action ?? '', 'admin') === 0) {
+    $admin = new AdminController();
+    if ($action === 'admin') $admin->index();
+    if ($action === 'admin_topic_delete' && $topicId) $admin->deleteTopic($topicId);
 } elseif ($topicId) {
     $controller->start($topicId);
 } elseif (empty($_GET)) {

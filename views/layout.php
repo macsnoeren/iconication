@@ -26,8 +26,20 @@
         <?php if($view !== 'home'): ?>
             <a href="<?= BASE_URL ?>?topic=<?= $topicId ?>&action=back" class="btn">⬅ Terug</a>
         <?php endif; ?>
-        <div style="font-size: 1.5rem;">Iconication</div>
-        <a href="<?= BASE_URL ?>" class="btn">🏠 Home</a>
+        <div style="font-size: 1.5rem;">Iconication 
+            <?php if(isset($_SESSION['username'])): ?>
+                <span style="font-size: 0.8rem;">(Welkom <?= htmlspecialchars($_SESSION['username']) ?>)</span>
+            <?php endif; ?>
+        </div>
+        <div>
+            <a href="<?= BASE_URL ?>" class="btn">🏠 Home</a>
+            <?php if(isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+                <a href="<?= BASE_URL ?>?action=admin" class="btn" style="background:#2ecc71">⚙ Admin</a>
+                <a href="<?= BASE_URL ?>?action=logout" class="btn" style="background:#e74c3c">Uitloggen</a>
+            <?php else: ?>
+                <a href="<?= BASE_URL ?>?action=login" class="btn">Inloggen</a>
+            <?php endif; ?>
+        </div>
     </div>
     <div class="container">
         <?php include __DIR__ . "/$view.php"; ?>
