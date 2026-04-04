@@ -5,7 +5,7 @@ session_start();
 // 1. PSR-4 Autoloader (zonder Composer)
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
-    $base_dir = __DIR__ . '/../app/';
+    $base_dir = dirname(__DIR__) . '/app/';
     $len = strlen($prefix);
     if (strncmp($prefix, $class, $len) !== 0) return;
     $relative_class = substr($class, $len);
