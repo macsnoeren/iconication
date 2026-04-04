@@ -111,7 +111,7 @@
         <?php unset($_SESSION['ai_error']); ?>
     <?php endif; ?>
 
-    <form method="POST" action="<?= BASE_URL ?>?action=admin_ai_preview" id="ai-form">
+    <form method="POST" action="<?= BASE_URL ?>?action=admin_ai_queue" id="ai-form">
         <div class="ai-field">
             <label for="topic-input">Onderwerp</label>
             <input
@@ -136,7 +136,7 @@
         <button type="submit" id="submit-btn" class="ai-submit">✨ Genereer Decision Tree</button>
         <div class="ai-loading" id="ai-loading">
             <div class="spinner"></div>
-            <span>AI genereert decision tree, even geduld...</span>
+            <span>Job aanmaken...</span>
         </div>
     </form>
 

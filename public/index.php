@@ -24,6 +24,7 @@ define('BASE_URL', $scriptName); // /iconication/public/index.php
 use App\Controllers\TopicController;
 use App\Controllers\AuthController;
 use App\Controllers\AdminController;
+use App\Controllers\ApiController;
 $controller = new TopicController();
 
 // Routing op basis van GET variabelen
@@ -76,8 +77,14 @@ if ($action === 'back' && $topicId) {
         $admin->getExistingImages();
     } elseif ($action === 'admin_ai_generate') {
         $admin->aiGenerateTopic();
-    } elseif ($action === 'admin_ai_preview') {
-        $admin->aiPreviewTopic();
+    } elseif ($action === 'admin_ai_queue') {
+        $admin->aiQueueTopic();
+    } elseif ($action === 'admin_ai_waiting' && isset($_GET['job'])) {
+        $admin->aiWaiting((int)$_GET['job']);
+    } elseif ($action === 'admin_ai_job_status' && isset($_GET['job'])) {
+        $admin->aiJobStatus((int)$_GET['job']);
+    } elseif ($action === 'admin_ai_preview' && isset($_GET['job'])) {
+        $admin->aiPreviewJob((int)$_GET['job']);
     } elseif ($action === 'admin_ai_save') {
         $admin->aiSaveTopic();
     } else {
@@ -86,6 +93,10 @@ if ($action === 'back' && $topicId) {
         header("Location: " . BASE_URL . "?action=admin");
         exit;
     }
+} elseif ($action === 'api_pending_jobs') {
+    (new ApiController())->pendingJobs();
+} elseif ($action === 'api_submit_result') {
+    (new ApiController())->submitResult();
 } elseif ($topicId && $nodeId) {
     $controller->showNode($topicId, $nodeId);
 } elseif ($topicId) {

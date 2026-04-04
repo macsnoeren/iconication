@@ -173,7 +173,7 @@ class AdminController {
         exit;
     }
 
-    // ─── AI generatie ────────────────────────────────────────────────────────
+    // ─── AI generatie (job-gebaseerd) ────────────────────────────────────────
 
     /** Toon het formulier om een nieuw onderwerp via AI te genereren. */
     public function aiGenerateTopic(): void {
@@ -181,8 +181,8 @@ class AdminController {
         include __DIR__ . "/../../views/layout.php";
     }
 
-    /** Stuur het onderwerp naar de Python AI-service en toon een preview. */
-    public function aiPreviewTopic(): void {
+    /** Sla het verzoek op als job in de DB en ga naar het wachtscherm. */
+    public function aiQueueTopic(): void {
         $topic = trim($_POST['topic'] ?? '');
         $goal  = trim($_POST['goal']  ?? '');
 
@@ -202,50 +202,80 @@ class AdminController {
             exit;
         }
 
-        $serviceUrl = defined('AI_SERVICE_URL') ? AI_SERVICE_URL : 'http://localhost:8000';
-        $payload     = json_encode(['topic' => $topic, 'goal' => $goal]);
+        $stmt = $this->db->prepare(
+            "INSERT INTO ai_jobs (topic, goal) VALUES (?, ?)"
+        );
+        $stmt->execute([$topic, $goal]);
+        $jobId = (int)$this->db->lastInsertId();
 
-        $ch = curl_init($serviceUrl . '/generate-topic');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_POSTFIELDS     => $payload,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Accept: application/json'],
-            CURLOPT_TIMEOUT        => 30,
-            CURLOPT_CONNECTTIMEOUT => 5,
-        ]);
-        $response   = curl_exec($ch);
-        $httpCode   = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError  = curl_error($ch);
-        curl_close($ch);
+        header("Location: " . BASE_URL . "?action=admin_ai_waiting&job=" . $jobId);
+        exit;
+    }
 
-        if ($curlError !== '') {
-            $_SESSION['ai_error'] = 'Kan de AI-service niet bereiken. Is de Python service gestart? (' . htmlspecialchars($curlError) . ')';
+    /** Toon het wachtscherm voor een lopende job. */
+    public function aiWaiting(int $jobId): void {
+        $stmt = $this->db->prepare("SELECT * FROM ai_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch();
+
+        if (!$job) {
             header("Location: " . BASE_URL . "?action=admin_ai_generate");
             exit;
         }
 
-        $data = json_decode($response, true);
-
-        if ($httpCode !== 200 || $data === null) {
-            $detail = $data['detail'] ?? $response;
-            $_SESSION['ai_error'] = 'AI-service fout: ' . htmlspecialchars((string)$detail);
+        // Als de job al klaar is, direct doorsturen
+        if ($job['status'] === 'done') {
+            header("Location: " . BASE_URL . "?action=admin_ai_preview&job=" . $jobId);
+            exit;
+        }
+        if ($job['status'] === 'error') {
+            $_SESSION['ai_error'] = 'Worker fout: ' . htmlspecialchars($job['error_message'] ?? 'onbekend');
             header("Location: " . BASE_URL . "?action=admin_ai_generate");
             exit;
         }
 
-        // Sla de ruwe boom op in de sessie zodat het preview-formulier er mee werkt
-        $_SESSION['ai_tree'] = $data;
+        $view = 'admin_ai_waiting';
+        include __DIR__ . "/../../views/layout.php";
+    }
 
-        $tree     = $data;
-        $ai_goal  = $goal;
-        $view     = 'admin_ai_preview';
+    /** JSON status-endpoint voor JS polling op het wachtscherm. */
+    public function aiJobStatus(int $jobId): void {
+        $stmt = $this->db->prepare("SELECT status, error_message FROM ai_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch();
+
+        header('Content-Type: application/json');
+        if (!$job) {
+            http_response_code(404);
+            echo json_encode(['status' => 'not_found']);
+            exit;
+        }
+        echo json_encode(['status' => $job['status'], 'error' => $job['error_message']]);
+        exit;
+    }
+
+    /** Toon de preview van een voltooide job. */
+    public function aiPreviewJob(int $jobId): void {
+        $stmt = $this->db->prepare("SELECT * FROM ai_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch();
+
+        if (!$job || $job['status'] !== 'done') {
+            header("Location: " . BASE_URL . "?action=admin_ai_waiting&job=" . $jobId);
+            exit;
+        }
+
+        $tree    = json_decode($job['result_json'], true);
+        $ai_goal = $job['goal'];
+        // $job beschikbaar stellen aan de view voor het job_id hidden field
+        $view    = 'admin_ai_preview';
         include __DIR__ . "/../../views/layout.php";
     }
 
     /** Sla de (eventueel aangepaste) AI-boom op in de database. */
     public function aiSaveTopic(): void {
         $topicName = trim($_POST['topic_name'] ?? '');
+        $jobId     = isset($_POST['job_id']) ? (int)$_POST['job_id'] : null;
         $rawNodes  = $_POST['nodes'] ?? [];
 
         if ($topicName === '') {
@@ -253,7 +283,6 @@ class AdminController {
             header("Location: " . BASE_URL . "?action=admin_ai_generate");
             exit;
         }
-
         if (empty($rawNodes)) {
             $_SESSION['ai_error'] = 'Geen nodes ontvangen.';
             header("Location: " . BASE_URL . "?action=admin_ai_generate");
@@ -266,26 +295,28 @@ class AdminController {
             $nodes[] = [
                 'id'       => (int)($n['id'] ?? 0),
                 'option_a' => [
-                    'label'       => mb_substr(trim(htmlspecialchars_decode($n['option_a']['label'] ?? '', ENT_QUOTES)), 0, 100),
-                    'image_hint'  => mb_substr(trim($n['option_a']['image_hint'] ?? ''), 0, 100),
-                    'next_node_id'=> $n['option_a']['next_node_id'] !== '' ? (int)$n['option_a']['next_node_id'] : null,
+                    'label'        => mb_substr(trim($n['option_a']['label'] ?? ''), 0, 100),
+                    'image_hint'   => mb_substr(trim($n['option_a']['image_hint'] ?? ''), 0, 100),
+                    'next_node_id' => ($n['option_a']['next_node_id'] ?? '') !== ''
+                        ? (int)$n['option_a']['next_node_id'] : null,
                 ],
                 'option_b' => [
-                    'label'       => mb_substr(trim(htmlspecialchars_decode($n['option_b']['label'] ?? '', ENT_QUOTES)), 0, 100),
-                    'image_hint'  => mb_substr(trim($n['option_b']['image_hint'] ?? ''), 0, 100),
-                    'next_node_id'=> $n['option_b']['next_node_id'] !== '' ? (int)$n['option_b']['next_node_id'] : null,
+                    'label'        => mb_substr(trim($n['option_b']['label'] ?? ''), 0, 100),
+                    'image_hint'   => mb_substr(trim($n['option_b']['image_hint'] ?? ''), 0, 100),
+                    'next_node_id' => ($n['option_b']['next_node_id'] ?? '') !== ''
+                        ? (int)$n['option_b']['next_node_id'] : null,
                 ],
             ];
         }
 
         $this->db->beginTransaction();
         try {
-            // 1. Maak het topic aan (root_node_id wordt later bijgewerkt)
+            // 1. Maak het topic aan
             $stmtTopic = $this->db->prepare("INSERT INTO topics (name, root_node_id) VALUES (?, NULL)");
             $stmtTopic->execute([htmlspecialchars($topicName, ENT_QUOTES, 'UTF-8')]);
             $topicId = (int)$this->db->lastInsertId();
 
-            // 2. Maak alle nodes aan en bouw een mapping: temp_id → real_id
+            // 2. Maak alle nodes aan; bouw mapping temp_id → real_id
             $idMap = [];
             foreach ($nodes as $n) {
                 $stmtNode = $this->db->prepare("INSERT INTO nodes (topic_id) VALUES (?)");
@@ -299,8 +330,7 @@ class AdminController {
                 foreach (['option_a', 'option_b'] as $optKey) {
                     $opt        = $n[$optKey];
                     $nextRealId = ($opt['next_node_id'] !== null && isset($idMap[$opt['next_node_id']]))
-                        ? $idMap[$opt['next_node_id']]
-                        : null;
+                        ? $idMap[$opt['next_node_id']] : null;
                     $stmtOpt = $this->db->prepare(
                         "INSERT INTO options (node_id, label, image_hint, image_url, next_node_id) VALUES (?, ?, ?, '', ?)"
                     );
@@ -313,10 +343,15 @@ class AdminController {
                 }
             }
 
-            // 4. Stel root_node_id in op de eerste node van de boom (temp id = 1)
+            // 4. Root node instellen
             if (isset($idMap[1])) {
                 $stmtRoot = $this->db->prepare("UPDATE topics SET root_node_id = ? WHERE id = ?");
                 $stmtRoot->execute([$idMap[1], $topicId]);
+            }
+
+            // 5. Job als verwerkt markeren
+            if ($jobId) {
+                $this->db->prepare("DELETE FROM ai_jobs WHERE id = ?")->execute([$jobId]);
             }
 
             $this->db->commit();
@@ -327,7 +362,6 @@ class AdminController {
             exit;
         }
 
-        unset($_SESSION['ai_tree']);
         header("Location: " . BASE_URL . "?action=admin_topic_nodes&topic=" . $topicId);
         exit;
     }

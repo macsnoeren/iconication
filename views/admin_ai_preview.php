@@ -161,6 +161,9 @@
 </div>
 
 <form method="POST" action="<?= BASE_URL ?>?action=admin_ai_save" id="save-form">
+    <?php if (!empty($job['id'])): ?>
+        <input type="hidden" name="job_id" value="<?= (int)$job['id'] ?>">
+    <?php endif; ?>
     <div class="topic-name-row">
         <label for="topic_name">Onderwerpnaam:</label>
         <input

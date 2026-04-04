@@ -32,6 +32,16 @@ class Database {
         // Migreer bestaande databases die image_hint nog niet hebben
         try { $db->exec("ALTER TABLE options ADD COLUMN image_hint TEXT"); } catch (\Exception $e) { /* kolom bestaat al */ }
         $db->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, role TEXT)");
+        $db->exec("CREATE TABLE IF NOT EXISTS ai_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            status TEXT DEFAULT 'pending',
+            topic TEXT NOT NULL,
+            goal TEXT DEFAULT '',
+            result_json TEXT,
+            error_message TEXT,
+            created_at INTEGER DEFAULT (strftime('%s','now')),
+            updated_at INTEGER DEFAULT (strftime('%s','now'))
+        )");
 
         // Seed data if empty
         $count = $db->query("SELECT COUNT(*) FROM topics")->fetchColumn();
