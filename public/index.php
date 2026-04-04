@@ -9,7 +9,10 @@ spl_autoload_register(function ($class) {
     $len = strlen($prefix);
     if (strncmp($prefix, $class, $len) !== 0) return;
     $relative_class = substr($class, $len);
-    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+    // Vervang backslashes door forward slashes voor Linux servers
+    $relative_class_path = str_replace('\\', '/', $relative_class);
+    $file = $base_dir . $relative_class_path . '.php';
+    
     if (file_exists($file)) require $file;
 });
 
