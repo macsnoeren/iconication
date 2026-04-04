@@ -16,38 +16,48 @@
     color: #666;
     margin: 0 0 30px;
 }
-.ai-input-group {
-    display: flex;
-    gap: 12px;
-    align-items: stretch;
-}
-.ai-input-group input[type="text"] {
-    flex: 1;
-    padding: 16px 20px;
-    font-size: 1.2rem;
+.ai-field { margin-bottom: 16px; }
+.ai-field label { display: block; font-weight: bold; color: #444; margin-bottom: 6px; font-size: 0.95rem; }
+.ai-field input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 18px;
+    font-size: 1.1rem;
     border: 2px solid #ddd;
     border-radius: 12px;
     outline: none;
     transition: border-color 0.2s;
 }
-.ai-input-group input[type="text"]:focus {
-    border-color: #9b59b6;
+.ai-field input[type="text"]:focus { border-color: #9b59b6; }
+.ai-field textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 18px;
+    font-size: 1rem;
+    border: 2px solid #ddd;
+    border-radius: 12px;
+    outline: none;
+    resize: vertical;
+    min-height: 90px;
+    font-family: inherit;
+    transition: border-color 0.2s;
 }
-.ai-input-group button {
-    padding: 16px 28px;
+.ai-field textarea:focus { border-color: #9b59b6; }
+.ai-submit {
+    width: 100%;
+    padding: 16px;
     background: #9b59b6;
     color: white;
     border: none;
     border-radius: 12px;
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     font-weight: bold;
     cursor: pointer;
     transition: background 0.2s, transform 0.1s;
-    white-space: nowrap;
 }
-.ai-input-group button:hover { background: #8e44ad; }
-.ai-input-group button:active { transform: scale(0.97); }
-.ai-input-group button:disabled { background: #bbb; cursor: not-allowed; }
+.ai-submit:hover { background: #8e44ad; }
+.ai-submit:active { transform: scale(0.98); }
+.ai-submit:disabled { background: #bbb; cursor: not-allowed; }
 .ai-error {
     background: #fde8e8;
     border: 1px solid #e74c3c;
@@ -102,18 +112,28 @@
     <?php endif; ?>
 
     <form method="POST" action="<?= BASE_URL ?>?action=admin_ai_preview" id="ai-form">
-        <div class="ai-input-group">
+        <div class="ai-field">
+            <label for="topic-input">Onderwerp</label>
             <input
                 type="text"
                 name="topic"
                 id="topic-input"
-                placeholder="bijv. hoofdpijn, honger, misselijk..."
+                placeholder="bijv. Hoofdpijn, Honger, Misselijk..."
                 maxlength="200"
                 required
                 autofocus
             >
-            <button type="submit" id="submit-btn">✨ Genereer</button>
         </div>
+        <div class="ai-field">
+            <label for="goal-input">Wat wil je bereiken? <span style="font-weight:normal; color:#888;">(optioneel)</span></label>
+            <textarea
+                name="goal"
+                id="goal-input"
+                maxlength="500"
+                placeholder="bijv. Achterhalen waar de pijn zit en hoe erg het is, zodat de begeleider gerichte hulp kan bieden."
+            ></textarea>
+        </div>
+        <button type="submit" id="submit-btn" class="ai-submit">✨ Genereer Decision Tree</button>
         <div class="ai-loading" id="ai-loading">
             <div class="spinner"></div>
             <span>AI genereert decision tree, even geduld...</span>

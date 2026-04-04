@@ -144,6 +144,12 @@
 .legend span { display: flex; align-items: center; gap: 6px; }
 </style>
 
+<?php if (!empty($ai_goal)): ?>
+<div style="background:#f0e8ff; border:1px solid #d7b8f7; border-radius:12px; padding:14px 18px; margin-bottom:20px; font-size:0.95rem; color:#5b2c6f;">
+    <strong>Doel:</strong> <?= htmlspecialchars($ai_goal) ?>
+</div>
+<?php endif; ?>
+
 <div class="preview-header">
     <h2>🌳 Voorvertoning Decision Tree</h2>
     <div class="legend">

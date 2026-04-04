@@ -19,7 +19,7 @@ app.add_middleware(
 
 PROMPT_TEMPLATE = """Je bent een specialist in augmentatieve en alternatieve communicatie (AAC).
 Maak een decision tree voor communicatie met een gebruiker over het onderwerp: "{topic}"
-
+{goal_line}
 Regels:
 - PRECIES 2 keuzes per node (option_a en option_b)
 - Maximaal 4 niveaus diep
@@ -57,23 +57,27 @@ Gebruik opeenvolgende integer IDs beginnend bij 1."""
 
 class TopicRequest(BaseModel):
     topic: str
+    goal: str = ""
 
 
 @app.post("/generate-topic")
 async def generate_topic(request: TopicRequest):
     topic = request.topic.strip()
+    goal  = request.goal.strip()
     if not topic:
         raise HTTPException(status_code=400, detail="Topic mag niet leeg zijn")
     if len(topic) > 200:
         raise HTTPException(status_code=400, detail="Topic is te lang (max 200 tekens)")
+    if len(goal) > 500:
+        raise HTTPException(status_code=400, detail="Doel is te lang (max 500 tekens)")
 
     provider = os.environ.get("AI_PROVIDER", "anthropic").lower()
 
     try:
         if provider == "openai":
-            result = _generate_with_openai(topic)
+            result = _generate_with_openai(topic, goal)
         else:
-            result = _generate_with_anthropic(topic)
+            result = _generate_with_anthropic(topic, goal)
 
         _validate_tree(result)
         return result
@@ -87,7 +91,12 @@ async def generate_topic(request: TopicRequest):
         raise HTTPException(status_code=500, detail=f"Fout bij genereren: {e}")
 
 
-def _generate_with_anthropic(topic: str) -> dict:
+def _build_prompt(topic: str, goal: str) -> str:
+    goal_line = f"Doel: {goal}" if goal else ""
+    return PROMPT_TEMPLATE.format(topic=topic, goal_line=goal_line)
+
+
+def _generate_with_anthropic(topic: str, goal: str) -> dict:
     try:
         import anthropic
     except ImportError:
@@ -98,7 +107,7 @@ def _generate_with_anthropic(topic: str) -> dict:
         raise ValueError("ANTHROPIC_API_KEY is niet ingesteld in .env")
 
     client = anthropic.Anthropic(api_key=api_key)
-    prompt = PROMPT_TEMPLATE.format(topic=topic)
+    prompt = _build_prompt(topic, goal)
 
     message = client.messages.create(
         model=os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
@@ -109,7 +118,7 @@ def _generate_with_anthropic(topic: str) -> dict:
     return _parse_json_response(message.content[0].text)
 
 
-def _generate_with_openai(topic: str) -> dict:
+def _generate_with_openai(topic: str, goal: str) -> dict:
     try:
         from openai import OpenAI
     except ImportError:
@@ -120,7 +129,7 @@ def _generate_with_openai(topic: str) -> dict:
         raise ValueError("OPENAI_API_KEY is niet ingesteld in .env")
 
     client = OpenAI(api_key=api_key)
-    prompt = PROMPT_TEMPLATE.format(topic=topic)
+    prompt = _build_prompt(topic, goal)
 
     response = client.chat.completions.create(
         model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),

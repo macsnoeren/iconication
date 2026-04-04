@@ -184,6 +184,7 @@ class AdminController {
     /** Stuur het onderwerp naar de Python AI-service en toon een preview. */
     public function aiPreviewTopic(): void {
         $topic = trim($_POST['topic'] ?? '');
+        $goal  = trim($_POST['goal']  ?? '');
 
         if ($topic === '') {
             $_SESSION['ai_error'] = 'Voer een onderwerp in.';
@@ -195,9 +196,14 @@ class AdminController {
             header("Location: " . BASE_URL . "?action=admin_ai_generate");
             exit;
         }
+        if (mb_strlen($goal) > 500) {
+            $_SESSION['ai_error'] = 'Doel is te lang (max 500 tekens).';
+            header("Location: " . BASE_URL . "?action=admin_ai_generate");
+            exit;
+        }
 
         $serviceUrl = defined('AI_SERVICE_URL') ? AI_SERVICE_URL : 'http://localhost:8000';
-        $payload     = json_encode(['topic' => $topic]);
+        $payload     = json_encode(['topic' => $topic, 'goal' => $goal]);
 
         $ch = curl_init($serviceUrl . '/generate-topic');
         curl_setopt_array($ch, [
@@ -231,8 +237,9 @@ class AdminController {
         // Sla de ruwe boom op in de sessie zodat het preview-formulier er mee werkt
         $_SESSION['ai_tree'] = $data;
 
-        $tree = $data;
-        $view = 'admin_ai_preview';
+        $tree     = $data;
+        $ai_goal  = $goal;
+        $view     = 'admin_ai_preview';
         include __DIR__ . "/../../views/layout.php";
     }
 
