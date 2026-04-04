@@ -14,8 +14,15 @@ spl_autoload_register(function ($class) {
 });
 
 // 2. Simpele Router
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
+
+// Zorg dat de router werkt, ook als de app in een submap staat
+$scriptPath = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+$uri = substr($requestUri, strlen($scriptPath));
+
+// Normaliseer de URI: verwijder trailing slashes en zorg voor een slash aan het begin
+$uri = '/' . trim($uri, '/');
 
 use App\Controllers\TopicController;
 
