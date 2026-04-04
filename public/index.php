@@ -9,9 +9,9 @@ spl_autoload_register(function ($class) {
     $len = strlen($prefix);
     if (strncmp($prefix, $class, $len) !== 0) return;
     $relative_class = substr($class, $len);
-    // Vervang backslashes door forward slashes voor Linux servers
-    $relative_class_path = str_replace('\\', '/', $relative_class);
-    $file = $base_dir . $relative_class_path . '.php';
+    
+    // PSR-4: vervang namespaces door mappen en voeg .php toe
+    $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
     
     if (file_exists($file)) require $file;
 });
@@ -23,7 +23,8 @@ $method = $_SERVER['REQUEST_METHOD'];
 // Zorg dat de router werkt, ook als de app in een submap staat
 $scriptName = $_SERVER['SCRIPT_NAME']; // /iconication/public/index.php
 $scriptPath = str_replace('\\', '/', dirname($scriptName)); // /iconication/public
-$scriptPath = rtrim($scriptPath, '/');
+// Verzeker dat scriptPath niet eindigt op een slash tenzij het de root is
+$scriptPath = ($scriptPath === '/') ? '' : rtrim($scriptPath, '/');
 
 $uri = (strpos($requestUri, $scriptPath) === 0) ? substr($requestUri, strlen($scriptPath)) : $requestUri;
 

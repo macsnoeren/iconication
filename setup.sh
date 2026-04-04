@@ -17,11 +17,11 @@ mkdir -p storage
 
 # 2. Verplaats bestanden naar de juiste PSR-4 locaties (indien ze in de root staan)
 echo "Bestanden organiseren..."
-[ -f "TopicController.php" ] && mv TopicController.php app/Controllers/TopicController.php
-[ -f "Database.php" ] && mv Database.php app/Core/Database.php
-[ -f "home.php" ] && mv home.php views/home.php
-[ -f "node.php" ] && mv node.php views/node.php
-[ -f "layout.php" ] && mv layout.php views/layout.php
+[ -f "TopicController.php" ] && mv TopicController.php app/Controllers/TopicController.php || true
+[ -f "Database.php" ] && mv Database.php app/Core/Database.php || true
+[ -f "home.php" ] && mv home.php views/home.php || true
+[ -f "node.php" ] && mv node.php views/node.php || true
+[ -f "layout.php" ] && mv layout.php views/layout.php || true
 
 # Verwijder dubbele bestanden in de root om autoloader errors te voorkomen
 echo "Opschonen root map..."
