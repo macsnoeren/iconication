@@ -21,8 +21,11 @@ $requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Zorg dat de router werkt, ook als de app in een submap staat
-$scriptPath = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
-$uri = substr($requestUri, strlen($scriptPath));
+$scriptName = $_SERVER['SCRIPT_NAME']; // /iconication/public/index.php
+$scriptPath = str_replace('\\', '/', dirname($scriptName)); // /iconication/public
+$scriptPath = rtrim($scriptPath, '/');
+
+$uri = (strpos($requestUri, $scriptPath) === 0) ? substr($requestUri, strlen($scriptPath)) : $requestUri;
 
 // Definieer de BASE_PATH voor gebruik in links en redirects
 $basePath = ($scriptPath === '/') ? '' : $scriptPath;
