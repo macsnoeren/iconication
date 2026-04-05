@@ -218,6 +218,16 @@
     <?php
     $nodes   = $tree['nodes'] ?? [];
     $nodeIds = array_column($nodes, 'id');
+
+    // Verzamel alle AI-gevonden image_urls zodat de picker ze toont
+    $aiImageUrls = [];
+    foreach ($nodes as $n) {
+        foreach (['option_a', 'option_b'] as $k) {
+            $u = $n[$k]['image_url'] ?? '';
+            if ($u) $aiImageUrls[] = $u;
+        }
+    }
+    $aiImageUrls = array_values(array_unique($aiImageUrls));
     ?>
 
     <div class="nodes-grid">
@@ -273,6 +283,7 @@
                         class="img-url-input"
                         oninput="updateThumb('<?= $inputId ?>')"
                     >
+                    <button type="button" class="img-pick-btn" onclick="openPicker('<?= $inputId ?>')">🖼</button>
                 </div>
 
                 <!-- Label -->
@@ -297,6 +308,8 @@
 </form>
 
 <script>
+const pickerExtraImages = <?= json_encode($aiImageUrls) ?>;
+
 function updateThumb(inputId) {
     const input = document.getElementById(inputId);
     const wrap  = input.closest('.img-row').querySelector('.img-thumb-wrap');
@@ -305,6 +318,8 @@ function updateThumb(inputId) {
         wrap.innerHTML = '<div class="img-thumb-empty">?</div>';
         return;
     }
-    wrap.innerHTML = '<img src="' + url + '" class="img-thumb" id="thumb_' + inputId + '" onerror="this.style.opacity=\'0.2\'">';
+    wrap.innerHTML = '<img src="' + url + '" class="img-thumb" onerror="this.style.opacity=\'0.2\'">';
 }
 </script>
+
+<?php include __DIR__ . '/_image_picker.php'; ?>

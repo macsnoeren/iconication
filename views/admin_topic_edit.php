@@ -276,6 +276,7 @@ $allNodeIds = array_column(array_column($nodes, 'node'), 'id');
                            value="<?= htmlspecialchars($imgUrl) ?>"
                            placeholder="https://..."
                            oninput="updateThumb('<?= $inputId ?>')">
+                    <button type="button" class="img-pick-btn" onclick="openPicker('<?= $inputId ?>')">🖼</button>
                 </div>
             </div>
             <?php endforeach; ?>
@@ -300,6 +301,11 @@ function updateThumb(inputId) {
         wrap.innerHTML = '<img src="' + url + '" class="img-thumb" onerror="this.style.opacity=\'0.15\'">';
     }
 }
+</script>
+
+<?php include __DIR__ . '/_image_picker.php'; ?>
+
+<script>
 
 // Toon opgeslagen-melding als er een anchor #saved in de URL staat
 if (window.location.hash === '#saved') {
