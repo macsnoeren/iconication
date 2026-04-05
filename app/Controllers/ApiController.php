@@ -58,8 +58,8 @@ class ApiController {
 
                 $nodes[] = [
                     'id'       => $nodeId,
-                    'option_a' => ['label' => $opts[0]['label'], 'image_hint' => $opts[0]['image_hint'], 'next_node_id' => $opts[0]['next_node_id']],
-                    'option_b' => ['label' => $opts[1]['label'], 'image_hint' => $opts[1]['image_hint'], 'next_node_id' => $opts[1]['next_node_id']],
+                    'option_a' => ['label' => $opts[0]['label'], 'image_hint' => $opts[0]['image_hint'], 'image_url' => $opts[0]['image_url'] ?? '', 'next_node_id' => $opts[0]['next_node_id']],
+                    'option_b' => ['label' => $opts[1]['label'], 'image_hint' => $opts[1]['image_hint'], 'image_url' => $opts[1]['image_url'] ?? '', 'next_node_id' => $opts[1]['next_node_id']],
                 ];
             }
 
