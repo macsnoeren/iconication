@@ -16,8 +16,11 @@
         .card { background: white; border: 8px solid #ddd; border-radius: 30px; display: flex; flex-direction: column; 
                 align-items: center; justify-content: center; text-decoration: none; color: #333; transition: transform 0.1s; }
         .card:active { transform: scale(0.96); border-color: var(--accent); }
-        .card img { max-width: 65%; max-height: 60%; object-fit: contain; }
+        .card img { max-width: 65%; max-height: 55%; object-fit: contain; }
         .card span { font-size: 2.5rem; font-weight: bold; margin-top: 15px; }
+        .card--end { border-color: #27ae60; }
+        .card--end:active { border-color: #1e8449; }
+        .end-badge { margin-top: 8px; background: #27ae60; color: white; border-radius: 20px; padding: 4px 16px; font-size: 1.1rem; font-weight: bold; }
         .btn { padding: 12px 24px; background: #555; color: white; border-radius: 12px; text-decoration: none; font-weight: bold; }
         .topic-list { display: grid; grid-template-columns: 1fr; gap: 15px; }
         .topic-btn { background: white; padding: 30px; border-radius: 20px; text-align: center; 
