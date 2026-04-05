@@ -31,6 +31,48 @@ class ApiController {
         echo json_encode($stmt->fetchAll());
     }
 
+    /** GET: geeft alle training-voorbeelden terug als JSON (topic + volledige boom). */
+    public function trainingExamples(): void {
+        $stmt = $this->db->query(
+            "SELECT t.id AS topic_id, t.name AS topic_name, e.notes
+             FROM ai_training_examples e
+             JOIN topics t ON t.id = e.topic_id"
+        );
+        $examples = $stmt->fetchAll();
+
+        $result = [];
+        foreach ($examples as $ex) {
+            // Haal alle nodes + opties op voor dit topic
+            $nodeStmt = $this->db->prepare("SELECT id FROM nodes WHERE topic_id = ? ORDER BY id ASC");
+            $nodeStmt->execute([$ex['topic_id']]);
+            $nodeIds = $nodeStmt->fetchAll(\PDO::FETCH_COLUMN);
+
+            $nodes = [];
+            foreach ($nodeIds as $nodeId) {
+                $optStmt = $this->db->prepare(
+                    "SELECT label, image_hint, next_node_id FROM options WHERE node_id = ? ORDER BY id ASC LIMIT 2"
+                );
+                $optStmt->execute([$nodeId]);
+                $opts = $optStmt->fetchAll();
+                if (count($opts) < 2) continue;
+
+                $nodes[] = [
+                    'id'       => $nodeId,
+                    'option_a' => ['label' => $opts[0]['label'], 'image_hint' => $opts[0]['image_hint'], 'next_node_id' => $opts[0]['next_node_id']],
+                    'option_b' => ['label' => $opts[1]['label'], 'image_hint' => $opts[1]['image_hint'], 'next_node_id' => $opts[1]['next_node_id']],
+                ];
+            }
+
+            $result[] = [
+                'topic'  => $ex['topic_name'],
+                'notes'  => $ex['notes'],
+                'nodes'  => $nodes,
+            ];
+        }
+
+        echo json_encode($result);
+    }
+
     /** POST: ontvangt het resultaat (of fout) van een verwerkte job. */
     public function submitResult(): void {
         $body = json_decode(file_get_contents('php://input'), true);

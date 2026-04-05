@@ -16,6 +16,9 @@ import re
 import time
 import argparse
 import configparser
+import subprocess
+import tempfile
+import os
 from pathlib import Path
 
 import requests
@@ -159,9 +162,11 @@ def enrich_with_icons(result: dict, language: str = "nl") -> dict:
 
 # ─── AI generatie via Ollama ──────────────────────────────────────────────────
 
-def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
+def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str,
+                         model: str = "") -> dict:
     ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
-    model      = get(cfg, "ai", "ollama_model", "llama3")
+    if not model:
+        model = active_model(cfg)
 
     payload = {
         "model":  model,
@@ -202,6 +207,109 @@ def parse_and_validate(content: str) -> dict:
     return data
 
 
+# ─── AI Tuning via Ollama Modelfile ──────────────────────────────────────────
+
+def fetch_training_examples(php_url: str, api_key: str) -> list:
+    resp = requests.get(
+        f"{php_url}?action=api_training_examples",
+        headers=headers(api_key),
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def build_modelfile(base_model: str, examples: list) -> str:
+    """Genereer een Ollama Modelfile met few-shot voorbeelden uit de database."""
+
+    system_prompt = (
+        "Je bent een specialist in augmentatieve en alternatieve communicatie (AAC). "
+        "Je maakt decision trees voor communicatie met gebruikers die moeite hebben met spreken. "
+        "Regels: precies 2 keuzes per node, simpele concrete taal (max 5 woorden), "
+        "maximaal 4 niveaus diep, alleen visueel voorstelbare concepten. "
+        "Geef altijd alleen valide JSON terug, geen extra tekst."
+    )
+
+    lines = [
+        f"FROM {base_model}",
+        f'SYSTEM """{system_prompt}"""',
+        "",
+    ]
+
+    for ex in examples:
+        topic = ex["topic"]
+        notes = ex.get("notes", "")
+        user_msg = f'Maak een decision tree voor het onderwerp: "{topic}"'
+        if notes:
+            user_msg += f" ({notes})"
+
+        # Normaliseer node-IDs naar 1-gebaseerde volgorde voor consistente few-shot patronen
+        id_map   = {n["id"]: i + 1 for i, n in enumerate(ex["nodes"])}
+        norm_nodes = []
+        for n in ex["nodes"]:
+            def remap(opt):
+                nxt = opt.get("next_node_id")
+                return {**opt, "next_node_id": id_map[nxt] if nxt in id_map else None}
+            norm_nodes.append({
+                "id":       id_map[n["id"]],
+                "option_a": remap(n["option_a"]),
+                "option_b": remap(n["option_b"]),
+            })
+
+        assistant_msg = json.dumps(
+            {"topic": topic, "nodes": norm_nodes},
+            ensure_ascii=False, indent=2
+        )
+
+        lines += [
+            f'MESSAGE user "{user_msg}"',
+            f'MESSAGE assistant "{assistant_msg}"',
+            "",
+        ]
+
+    return "\n".join(lines)
+
+
+def run_tune(cfg: configparser.ConfigParser, php_url: str, api_key: str) -> None:
+    base_model   = get(cfg, "ai", "ollama_model", "llama3")
+    tuned_model  = get(cfg, "ai", "tuned_model_name", "iconication-aac")
+    ollama_bin   = get(cfg, "ai", "ollama_bin", "ollama")
+
+    print(f"Trainingsvoorbeelden ophalen van {php_url} ...")
+    examples = fetch_training_examples(php_url, api_key)
+
+    if not examples:
+        print("Geen trainingsvoorbeelden gevonden. Markeer topics via Admin → AI Trainen.")
+        return
+
+    print(f"{len(examples)} voorbeeld(en) geladen: {[e['topic'] for e in examples]}")
+
+    modelfile_content = build_modelfile(base_model, examples)
+
+    # Schrijf Modelfile naar een tijdelijk bestand
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".Modelfile",
+                                     delete=False, encoding="utf-8")
+    tmp.write(modelfile_content)
+    tmp.close()
+
+    print(f"\nModelfile geschreven naar: {tmp.name}")
+    print(f"Aanmaken model '{tuned_model}' op basis van '{base_model}' ...")
+
+    try:
+        result = subprocess.run(
+            [ollama_bin, "create", tuned_model, "-f", tmp.name],
+            capture_output=False,
+            text=True,
+        )
+        if result.returncode == 0:
+            print(f"\n✓ Model '{tuned_model}' succesvol aangemaakt.")
+            print(f"  De worker gebruikt dit model automatisch bij de volgende jobs.")
+        else:
+            print(f"\n✗ Ollama gaf een foutcode terug ({result.returncode}).")
+    finally:
+        os.unlink(tmp.name)
+
+
 # ─── Job verwerking ──────────────────────────────────────────────────────────
 
 def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job: dict) -> None:
@@ -222,25 +330,52 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
+def active_model(cfg: configparser.ConfigParser) -> str:
+    """Geeft het getuunde model terug als het bestaat in Ollama, anders het basis model."""
+    tuned      = get(cfg, "ai", "tuned_model_name", "iconication-aac")
+    base       = get(cfg, "ai", "ollama_model", "llama3")
+    ollama_bin = get(cfg, "ai", "ollama_bin", "ollama")
+    if not tuned:
+        return base
+    try:
+        result = subprocess.run(
+            [ollama_bin, "list"], capture_output=True, text=True, timeout=5
+        )
+        if tuned in result.stdout:
+            return tuned
+    except Exception:
+        pass
+    return base
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Iconication AI Worker")
     parser.add_argument("--config", default="config.ini", help="Pad naar config bestand")
+    parser.add_argument("--tune", action="store_true",
+                        help="Maak een getuned Ollama-model op basis van de trainingsvoorbeelden")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
 
-    php_url  = get(cfg, "app", "php_app_url").rstrip("/")
-    api_key  = get(cfg, "app", "api_key")
-    interval = int(get(cfg, "app", "poll_interval", "10"))
-    provider = get(cfg, "ai", "provider", "anthropic")
+    php_url = get(cfg, "app", "php_app_url").rstrip("/")
+    api_key = get(cfg, "app", "api_key")
 
     if not php_url:
         sys.exit("FOUT: php_app_url is niet ingesteld in config.ini")
     if not api_key:
         sys.exit("FOUT: api_key is niet ingesteld in config.ini")
 
+    # ── Tune modus ────────────────────────────────────────────────────
+    if args.tune:
+        run_tune(cfg, php_url, api_key)
+        return
+
+    # ── Poll modus ────────────────────────────────────────────────────
+    interval = int(get(cfg, "app", "poll_interval", "10"))
+    model    = active_model(cfg)
+
     print(f"Iconication Worker gestart — {php_url}")
-    print(f"Poll-interval: {interval}s  |  Provider: {provider}  |  Ctrl+C om te stoppen\n")
+    print(f"Model: {model}  |  Poll-interval: {interval}s  |  Ctrl+C om te stoppen\n")
 
     try:
         while True:

@@ -75,6 +75,10 @@ if ($action === 'back' && $topicId) {
         $admin->deleteNode($topicId, $nodeId);
     } elseif ($action === 'admin_get_images') {
         $admin->getExistingImages();
+    } elseif ($action === 'admin_training') {
+        $admin->showTraining();
+    } elseif ($action === 'admin_save_training') {
+        $admin->saveTraining();
     } elseif ($action === 'admin_topic_edit' && $topicId) {
         $admin->showTopicEdit($topicId);
     } elseif ($action === 'admin_save_topic_edit' && $topicId) {
@@ -101,6 +105,8 @@ if ($action === 'back' && $topicId) {
     (new ApiController())->pendingJobs();
 } elseif ($action === 'api_submit_result') {
     (new ApiController())->submitResult();
+} elseif ($action === 'api_training_examples') {
+    (new ApiController())->trainingExamples();
 } elseif ($topicId && $nodeId) {
     $controller->showNode($topicId, $nodeId);
 } elseif ($topicId) {

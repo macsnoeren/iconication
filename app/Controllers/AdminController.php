@@ -173,6 +173,42 @@ class AdminController {
         exit;
     }
 
+    // ─── AI Training ──────────────────────────────────────────────────────────
+
+    /** Toon de trainingspagina: alle topics met een checkbox om ze als voorbeeld te markeren. */
+    public function showTraining(): void {
+        $topics = $this->db->query(
+            "SELECT t.*, e.id AS example_id, e.notes
+             FROM topics t
+             LEFT JOIN ai_training_examples e ON e.topic_id = t.id
+             ORDER BY t.name ASC"
+        )->fetchAll();
+        $view = 'admin_training';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    /** Sla de training-selectie op (welke topics als voorbeeld dienen). */
+    public function saveTraining(): void {
+        $selected = $_POST['example_topics'] ?? [];
+        $notes    = $_POST['notes'] ?? [];
+
+        // Verwijder alle huidige voorbeelden
+        $this->db->exec("DELETE FROM ai_training_examples");
+
+        // Voeg de geselecteerde topics opnieuw in
+        $stmt = $this->db->prepare(
+            "INSERT INTO ai_training_examples (topic_id, notes) VALUES (?, ?)"
+        );
+        foreach ($selected as $topicId) {
+            $topicId = (int)$topicId;
+            $note    = mb_substr(trim($notes[$topicId] ?? ''), 0, 500);
+            $stmt->execute([$topicId, $note]);
+        }
+
+        header("Location: " . BASE_URL . "?action=admin_training#saved");
+        exit;
+    }
+
     // ─── Topic overzicht bewerken ─────────────────────────────────────────────
 
     /** Toon het bewerkingsoverzicht voor een heel topic (alle nodes tegelijk). */

@@ -32,6 +32,7 @@ $apiKey = Config::getApiKey();
 <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
     <a href="<?= BASE_URL ?>?action=admin_add_topic" class="btn" style="background:#2ecc71;">+ Nieuw Onderwerp</a>
     <a href="<?= BASE_URL ?>?action=admin_ai_generate" class="btn" style="background:#9b59b6;">🤖 AI Genereer Onderwerp</a>
+    <a href="<?= BASE_URL ?>?action=admin_training" class="btn" style="background:#e67e22;">🎓 AI Trainen</a>
 </div>
 <table style="width: 100%; background: white; border-collapse: collapse; border-radius: 10px; overflow: hidden;">
     <thead style="background: #2c3e50; color: white;">
