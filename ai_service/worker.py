@@ -23,7 +23,7 @@ import requests
 # ─── Config laden ────────────────────────────────────────────────────────────
 
 def load_config(path: str) -> configparser.ConfigParser:
-    cfg = configparser.ConfigParser()
+    cfg = configparser.ConfigParser(inline_comment_prefixes=("#", ";"))
     if not Path(path).exists():
         sys.exit(
             f"FOUT: Config bestand niet gevonden: {path}\n"
@@ -120,46 +120,23 @@ def submit_error(php_url: str, api_key: str, job_id: int, error: str) -> None:
     )
 
 
-# ─── AI generatie ─────────────────────────────────────────────────────────────
+# ─── AI generatie via Ollama ──────────────────────────────────────────────────
 
-def generate_with_anthropic(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
-    try:
-        import anthropic
-    except ImportError:
-        raise RuntimeError("anthropic pakket niet gevonden. Voer: pip install anthropic")
+def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
+    ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
+    model      = get(cfg, "ai", "ollama_model", "llama3")
 
-    api_key = get(cfg, "ai", "anthropic_api_key")
-    if not api_key or api_key.startswith("sk-ant-..."):
-        raise RuntimeError("anthropic_api_key is niet ingesteld in config.ini")
+    payload = {
+        "model":  model,
+        "prompt": build_prompt(topic, goal),
+        "stream": False,
+    }
 
-    model = get(cfg, "ai", "anthropic_model", "claude-haiku-4-5-20251001")
-    client = anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model=model,
-        max_tokens=2048,
-        messages=[{"role": "user", "content": build_prompt(topic, goal)}],
-    )
-    return parse_and_validate(message.content[0].text)
+    response = requests.post(ollama_url, json=payload, timeout=600)
+    response.raise_for_status()
 
-
-def generate_with_openai(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
-    try:
-        from openai import OpenAI
-    except ImportError:
-        raise RuntimeError("openai pakket niet gevonden. Voer: pip install openai")
-
-    api_key = get(cfg, "ai", "openai_api_key")
-    if not api_key or api_key.startswith("sk-..."):
-        raise RuntimeError("openai_api_key is niet ingesteld in config.ini")
-
-    model = get(cfg, "ai", "openai_model", "gpt-4o-mini")
-    client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": build_prompt(topic, goal)}],
-        response_format={"type": "json_object"},
-    )
-    return parse_and_validate(response.choices[0].message.content)
+    raw = response.json().get("response", "")
+    return parse_and_validate(raw)
 
 
 def parse_and_validate(content: str) -> dict:
@@ -188,17 +165,13 @@ def parse_and_validate(content: str) -> dict:
 # ─── Job verwerking ──────────────────────────────────────────────────────────
 
 def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job: dict) -> None:
-    job_id   = job["id"]
-    topic    = job["topic"]
-    goal     = job.get("goal", "")
-    provider = get(cfg, "ai", "provider", "anthropic").lower()
+    job_id = job["id"]
+    topic  = job["topic"]
+    goal   = job.get("goal", "")
 
     print(f"  → Job #{job_id}: '{topic}'")
     try:
-        if provider == "openai":
-            result = generate_with_openai(cfg, topic, goal)
-        else:
-            result = generate_with_anthropic(cfg, topic, goal)
+        result = generate_with_ollama(cfg, topic, goal)
 
         submit_result(php_url, api_key, job_id, result)
         print(f"  ✓ Job #{job_id} klaar ({len(result['nodes'])} nodes)")

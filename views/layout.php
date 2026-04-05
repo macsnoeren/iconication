@@ -6,9 +6,12 @@
     <title>Iconication - AAC</title>
     <style>
         :root { --primary: #2c3e50; --bg: #f4f7f6; --accent: #3498db; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        .header { background: var(--primary); color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; display: flex; flex-direction: column; min-height: 100vh; }
+        .header { background: var(--primary); color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); flex-shrink: 0; flex-wrap: wrap; gap: 8px; }
         .container { flex: 1; padding: 20px; display: flex; flex-direction: column; }
+        /* Alleen het navigatiescherm (node.php / home.php) vult de volledige viewport zonder scrollen */
+        body.fullscreen { height: 100vh; overflow: hidden; }
+        body.fullscreen .container { overflow: hidden; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
         .card { background: white; border: 8px solid #ddd; border-radius: 30px; display: flex; flex-direction: column; 
                 align-items: center; justify-content: center; text-decoration: none; color: #333; transition: transform 0.1s; }
@@ -21,7 +24,7 @@
                      text-decoration: none; color: var(--primary); font-size: 2rem; font-weight: bold; border: 4px solid #ccc; }
     </style>
 </head>
-<body>
+<body<?= in_array($view ?? '', ['home', 'node']) ? ' class="fullscreen"' : '' ?>>
     <div class="header">
         <?php if($view !== 'home'): ?>
             <a href="<?= BASE_URL ?>?topic=<?= $topicId ?>&action=back" class="btn">⬅ Terug</a>
