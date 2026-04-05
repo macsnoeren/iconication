@@ -142,6 +142,18 @@
     background: white;
 }
 .img-url-input:focus { border-color: #3498db; }
+.opt-select {
+    width: 100%;
+    padding: 7px 10px;
+    font-size: 0.9rem;
+    border: 1px solid #ddd;
+    border-radius: 7px;
+    outline: none;
+    background: white;
+    margin-bottom: 6px;
+    color: #333;
+}
+.opt-select:focus { border-color: #3498db; }
 .action-bar {
     display: flex;
     gap: 12px;
@@ -247,7 +259,6 @@ $allNodeIds = array_column(array_column($nodes, 'node'), 'id');
                 <input type="hidden" name="nodes[<?= $i ?>][<?= $optKey ?>][id]" value="<?= (int)$optId ?>">
                 <div class="opt-label-row">
                     <span class="opt-badge"><?= $optLabel ?></span>
-                    <span class="arrow-badge <?= $isTerm ? 'terminal' : '' ?>"><?= $arrowTxt ?></span>
                 </div>
                 <input type="text"
                        class="opt-text-input"
@@ -257,9 +268,17 @@ $allNodeIds = array_column(array_column($nodes, 'node'), 'id');
                 <input type="hidden"
                        name="nodes[<?= $i ?>][<?= $optKey ?>][image_hint]"
                        value="<?= htmlspecialchars($opt['image_hint'] ?? '') ?>">
-                <input type="hidden"
-                       name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]"
-                       value="<?= $nextId !== null ? (int)$nextId : '' ?>">
+                <select name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]" class="opt-select">
+                    <option value="">★ Eindpunt (geen volgende node)</option>
+                    <?php foreach ($nodes as $targetEntry):
+                        $tid = (int)$targetEntry['node']['id'];
+                        if ($tid === (int)$node['id']) continue; // niet naar zichzelf
+                    ?>
+                        <option value="<?= $tid ?>" <?= ((int)$nextId === $tid) ? 'selected' : '' ?>>
+                            Node <?= $tid ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
                 <div class="img-row">
                     <div class="img-thumb-wrap" id="wrap_<?= $inputId ?>">
                         <?php if ($imgUrl): ?>

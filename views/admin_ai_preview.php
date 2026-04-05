@@ -139,6 +139,18 @@
     color: #555;
 }
 .img-url-input:focus { border-color: #9b59b6; }
+.preview-select {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    outline: none;
+    background: white;
+    margin-bottom: 8px;
+    color: #333;
+}
+.preview-select:focus { border-color: #9b59b6; }
 .action-bar {
     display: flex;
     gap: 14px;
@@ -256,11 +268,20 @@
                     <?php if (!empty($opt['image_hint'])): ?>
                         <span class="hint-badge">💡 <?= htmlspecialchars($opt['image_hint']) ?></span>
                     <?php endif; ?>
-                    <span class="<?= $arrowClass ?>"><?= $arrowText ?></span>
                 </div>
                 <input type="hidden" name="nodes[<?= $i ?>][id]"                              value="<?= $node['id'] ?>">
-                <input type="hidden" name="nodes[<?= $i ?>][<?= $optKey ?>][image_hint]"      value="<?= htmlspecialchars($opt['image_hint'] ?? '') ?>">
-                <input type="hidden" name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]"    value="<?= $nextId !== null ? $nextId : '' ?>">
+                <input type="hidden" name="nodes[<?= $i ?>][<?= $optKey ?>][image_hint]" value="<?= htmlspecialchars($opt['image_hint'] ?? '') ?>">
+                <select name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]" class="preview-select">
+                    <option value="">★ Eindpunt (geen volgende node)</option>
+                    <?php foreach ($nodes as $targetNode):
+                        $tid = (int)$targetNode['id'];
+                        if ($tid === (int)$node['id']) continue;
+                    ?>
+                        <option value="<?= $tid ?>" <?= ((int)$nextId === $tid) ? 'selected' : '' ?>>
+                            Node <?= $tid ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
 
                 <!-- Afbeelding preview + URL -->
                 <div class="img-row">
