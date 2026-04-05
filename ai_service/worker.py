@@ -120,6 +120,44 @@ def submit_error(php_url: str, api_key: str, job_id: int, error: str) -> None:
     )
 
 
+# ─── Iconify icon zoeken (gratis, geen API key) ───────────────────────────────
+
+def find_icon(hint: str) -> str:
+    """Zoek een vrij pictogram via Iconify. Geeft een SVG-URL terug of lege string."""
+    if not hint.strip():
+        return ""
+    try:
+        resp = requests.get(
+            "https://api.iconify.design/search",
+            params={"query": hint, "limit": 1},
+            timeout=5,
+        )
+        resp.raise_for_status()
+        icons = resp.json().get("icons", [])
+        if not icons:
+            return ""
+        prefix, name = icons[0].split(":", 1)
+        return f"https://api.iconify.design/{prefix}/{name}.svg"
+    except Exception as e:
+        print(f"  [icon] Zoekfout voor '{hint}': {e}")
+        return ""
+
+
+def enrich_with_icons(result: dict) -> dict:
+    """Voeg image_url toe aan elke optie op basis van image_hint."""
+    for node in result["nodes"]:
+        for opt_key in ("option_a", "option_b"):
+            opt  = node[opt_key]
+            hint = opt.get("image_hint", "")
+            url  = find_icon(hint)
+            opt["image_url"] = url
+            if url:
+                print(f"  [icon] '{hint}' → {url}")
+            else:
+                print(f"  [icon] '{hint}' → geen resultaat")
+    return result
+
+
 # ─── AI generatie via Ollama ──────────────────────────────────────────────────
 
 def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str) -> dict:
@@ -135,8 +173,10 @@ def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str) 
     response = requests.post(ollama_url, json=payload, timeout=600)
     response.raise_for_status()
 
-    raw = response.json().get("response", "")
-    return parse_and_validate(raw)
+    raw    = response.json().get("response", "")
+    result = parse_and_validate(raw)
+    result = enrich_with_icons(result)
+    return result
 
 
 def parse_and_validate(content: str) -> dict:

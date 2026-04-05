@@ -297,12 +297,14 @@ class AdminController {
                 'option_a' => [
                     'label'        => mb_substr(trim($n['option_a']['label'] ?? ''), 0, 100),
                     'image_hint'   => mb_substr(trim($n['option_a']['image_hint'] ?? ''), 0, 100),
+                    'image_url'    => mb_substr(trim($n['option_a']['image_url'] ?? ''), 0, 500),
                     'next_node_id' => ($n['option_a']['next_node_id'] ?? '') !== ''
                         ? (int)$n['option_a']['next_node_id'] : null,
                 ],
                 'option_b' => [
                     'label'        => mb_substr(trim($n['option_b']['label'] ?? ''), 0, 100),
                     'image_hint'   => mb_substr(trim($n['option_b']['image_hint'] ?? ''), 0, 100),
+                    'image_url'    => mb_substr(trim($n['option_b']['image_url'] ?? ''), 0, 500),
                     'next_node_id' => ($n['option_b']['next_node_id'] ?? '') !== ''
                         ? (int)$n['option_b']['next_node_id'] : null,
                 ],
@@ -332,12 +334,13 @@ class AdminController {
                     $nextRealId = ($opt['next_node_id'] !== null && isset($idMap[$opt['next_node_id']]))
                         ? $idMap[$opt['next_node_id']] : null;
                     $stmtOpt = $this->db->prepare(
-                        "INSERT INTO options (node_id, label, image_hint, image_url, next_node_id) VALUES (?, ?, ?, '', ?)"
+                        "INSERT INTO options (node_id, label, image_hint, image_url, next_node_id) VALUES (?, ?, ?, ?, ?)"
                     );
                     $stmtOpt->execute([
                         $realNodeId,
                         htmlspecialchars($opt['label'], ENT_QUOTES, 'UTF-8'),
                         htmlspecialchars($opt['image_hint'], ENT_QUOTES, 'UTF-8'),
+                        htmlspecialchars($opt['image_url'], ENT_QUOTES, 'UTF-8'),
                         $nextRealId,
                     ]);
                 }

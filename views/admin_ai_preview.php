@@ -100,6 +100,45 @@
     background: white;
 }
 .option-row input[type="text"]:focus { border-color: #9b59b6; }
+.img-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.img-thumb-wrap {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #f8f4ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.img-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+}
+.img-thumb-empty {
+    color: #ccc;
+    font-size: 1.4rem;
+}
+.img-url-input {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    outline: none;
+    background: white;
+    font-family: monospace;
+    color: #555;
+}
+.img-url-input:focus { border-color: #9b59b6; }
 .action-bar {
     display: flex;
     gap: 14px;
@@ -195,9 +234,11 @@
             <?php foreach (['option_a' => 'A', 'option_b' => 'B'] as $optKey => $optLabel):
                 $opt        = $node[$optKey];
                 $nextId     = $opt['next_node_id'] ?? null;
+                $imageUrl   = $opt['image_url'] ?? '';
                 $isTerminal = ($nextId === null || !in_array($nextId, $nodeIds));
                 $arrowText  = $isTerminal ? '★ Eindpunt' : '→ Node ' . $nextId;
                 $arrowClass = $isTerminal ? 'arrow-badge terminal' : 'arrow-badge';
+                $inputId    = "img_{$i}_{$optKey}";
             ?>
             <div class="option-row">
                 <div class="option-header">
@@ -207,26 +248,40 @@
                     <?php endif; ?>
                     <span class="<?= $arrowClass ?>"><?= $arrowText ?></span>
                 </div>
-                <input
-                    type="hidden"
-                    name="nodes[<?= $i ?>][id]"
-                    value="<?= $node['id'] ?>"
-                >
-                <input
-                    type="hidden"
-                    name="nodes[<?= $i ?>][<?= $optKey ?>][image_hint]"
-                    value="<?= htmlspecialchars($opt['image_hint'] ?? '') ?>"
-                >
-                <input
-                    type="hidden"
-                    name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]"
-                    value="<?= $nextId !== null ? $nextId : '' ?>"
-                >
+                <input type="hidden" name="nodes[<?= $i ?>][id]"                              value="<?= $node['id'] ?>">
+                <input type="hidden" name="nodes[<?= $i ?>][<?= $optKey ?>][image_hint]"      value="<?= htmlspecialchars($opt['image_hint'] ?? '') ?>">
+                <input type="hidden" name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]"    value="<?= $nextId !== null ? $nextId : '' ?>">
+
+                <!-- Afbeelding preview + URL -->
+                <div class="img-row">
+                    <div class="img-thumb-wrap">
+                        <?php if ($imageUrl): ?>
+                            <img src="<?= htmlspecialchars($imageUrl) ?>"
+                                 class="img-thumb"
+                                 id="thumb_<?= $inputId ?>"
+                                 onerror="this.style.opacity='0.2'">
+                        <?php else: ?>
+                            <div class="img-thumb-empty">?</div>
+                        <?php endif; ?>
+                    </div>
+                    <input
+                        type="text"
+                        id="<?= $inputId ?>"
+                        name="nodes[<?= $i ?>][<?= $optKey ?>][image_url]"
+                        value="<?= htmlspecialchars($imageUrl) ?>"
+                        placeholder="https://..."
+                        class="img-url-input"
+                        oninput="updateThumb('<?= $inputId ?>')"
+                    >
+                </div>
+
+                <!-- Label -->
                 <input
                     type="text"
                     name="nodes[<?= $i ?>][<?= $optKey ?>][label]"
                     value="<?= htmlspecialchars($opt['label'] ?? '') ?>"
                     maxlength="100"
+                    placeholder="Label..."
                     required
                 >
             </div>
@@ -241,6 +296,15 @@
     </div>
 </form>
 
-<p style="text-align:center; color:#999; font-size:0.85rem; margin-top: -10px;">
-    Afbeeldingen kunnen na het opslaan worden toegewezen via de node-editor.
-</p>
+<script>
+function updateThumb(inputId) {
+    const input = document.getElementById(inputId);
+    const wrap  = input.closest('.img-row').querySelector('.img-thumb-wrap');
+    const url   = input.value.trim();
+    if (!url) {
+        wrap.innerHTML = '<div class="img-thumb-empty">?</div>';
+        return;
+    }
+    wrap.innerHTML = '<img src="' + url + '" class="img-thumb" id="thumb_' + inputId + '" onerror="this.style.opacity=\'0.2\'">';
+}
+</script>
