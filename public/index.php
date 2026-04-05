@@ -75,6 +75,10 @@ if ($action === 'back' && $topicId) {
         $admin->deleteNode($topicId, $nodeId);
     } elseif ($action === 'admin_get_images') {
         $admin->getExistingImages();
+    } elseif ($action === 'admin_topic_edit' && $topicId) {
+        $admin->showTopicEdit($topicId);
+    } elseif ($action === 'admin_save_topic_edit' && $topicId) {
+        $admin->saveTopicEdit($topicId);
     } elseif ($action === 'admin_ai_generate') {
         $admin->aiGenerateTopic();
     } elseif ($action === 'admin_ai_queue') {

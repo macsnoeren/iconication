@@ -173,6 +173,83 @@ class AdminController {
         exit;
     }
 
+    // ─── Topic overzicht bewerken ─────────────────────────────────────────────
+
+    /** Toon het bewerkingsoverzicht voor een heel topic (alle nodes tegelijk). */
+    public function showTopicEdit(int $topicId): void {
+        $stmtTopic = $this->db->prepare("SELECT * FROM topics WHERE id = ?");
+        $stmtTopic->execute([$topicId]);
+        $topic = $stmtTopic->fetch();
+
+        if (!$topic) {
+            header("Location: " . BASE_URL . "?action=admin");
+            exit;
+        }
+
+        $stmtNodes = $this->db->prepare("SELECT * FROM nodes WHERE topic_id = ? ORDER BY id ASC");
+        $stmtNodes->execute([$topicId]);
+        $rawNodes = $stmtNodes->fetchAll();
+
+        // Laad opties per node
+        $nodes = [];
+        foreach ($rawNodes as $node) {
+            $stmtOpts = $this->db->prepare("SELECT * FROM options WHERE node_id = ? ORDER BY id ASC");
+            $stmtOpts->execute([$node['id']]);
+            $opts = $stmtOpts->fetchAll();
+            // Zorg altijd voor 2 opties
+            while (count($opts) < 2) {
+                $opts[] = ['id' => null, 'label' => '', 'image_url' => '', 'image_hint' => '', 'next_node_id' => null];
+            }
+            $nodes[] = ['node' => $node, 'options' => $opts];
+        }
+
+        $view = 'admin_topic_edit';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    /** Sla alle wijzigingen in het bewerkingsoverzicht op. */
+    public function saveTopicEdit(int $topicId): void {
+        $topicName = trim($_POST['topic_name'] ?? '');
+        $rootNodeId = !empty($_POST['root_node_id']) ? (int)$_POST['root_node_id'] : null;
+        $rawNodes   = $_POST['nodes'] ?? [];
+
+        if ($topicName === '') {
+            header("Location: " . BASE_URL . "?action=admin_topic_edit&topic=$topicId");
+            exit;
+        }
+
+        // Topic naam en root bijwerken
+        $this->db->prepare("UPDATE topics SET name = ?, root_node_id = ? WHERE id = ?")
+            ->execute([$topicName, $rootNodeId, $topicId]);
+
+        // Opties bijwerken
+        foreach ($rawNodes as $n) {
+            foreach (['option_a', 'option_b'] as $optKey) {
+                $opt      = $n[$optKey] ?? [];
+                $optionId = !empty($opt['id']) ? (int)$opt['id'] : null;
+                if (!$optionId) continue;
+
+                $label    = mb_substr(trim($opt['label']     ?? ''), 0, 100);
+                $hint     = mb_substr(trim($opt['image_hint'] ?? ''), 0, 100);
+                $imageUrl = mb_substr(trim($opt['image_url']  ?? ''), 0, 500);
+                $nextId   = ($opt['next_node_id'] ?? '') !== '' ? (int)$opt['next_node_id'] : null;
+
+                $this->db->prepare(
+                    "UPDATE options SET label = ?, image_hint = ?, image_url = ?, next_node_id = ? WHERE id = ?"
+                )->execute([
+                    htmlspecialchars($label, ENT_QUOTES, 'UTF-8'),
+                    htmlspecialchars($hint, ENT_QUOTES, 'UTF-8'),
+                    htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'),
+                    $nextId,
+                    $optionId,
+                ]);
+            }
+        }
+
+        header("Location: " . BASE_URL . "?action=admin_topic_edit&topic=$topicId#saved");
+        exit;
+    }
+
     // ─── AI generatie (job-gebaseerd) ────────────────────────────────────────
 
     /** Toon het formulier om een nieuw onderwerp via AI te genereren. */
