@@ -271,11 +271,15 @@ $allNodeIds = array_column(array_column($nodes, 'node'), 'id');
                 <select name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]" class="opt-select">
                     <option value="">★ Eindpunt (geen volgende node)</option>
                     <?php foreach ($nodes as $targetEntry):
-                        $tid = (int)$targetEntry['node']['id'];
-                        if ($tid === (int)$node['id']) continue; // niet naar zichzelf
+                        $tid     = (int)$targetEntry['node']['id'];
+                        if ($tid === (int)$node['id']) continue;
+                        $tOpts   = $targetEntry['options'];
+                        $labelA  = $tOpts[0]['label'] ?? '';
+                        $labelB  = $tOpts[1]['label'] ?? '';
+                        $preview = $labelA && $labelB ? " ($labelA / $labelB)" : '';
                     ?>
                         <option value="<?= $tid ?>" <?= ((int)$nextId === $tid) ? 'selected' : '' ?>>
-                            Node <?= $tid ?>
+                            Node <?= $tid ?><?= htmlspecialchars($preview) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

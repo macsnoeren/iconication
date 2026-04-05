@@ -120,36 +120,35 @@ def submit_error(php_url: str, api_key: str, job_id: int, error: str) -> None:
     )
 
 
-# ─── Iconify icon zoeken (gratis, geen API key) ───────────────────────────────
+# ─── ARASAAC pictogram zoeken ─────────────────────────────────────────────────
 
-def find_icon(hint: str) -> str:
-    """Zoek een vrij pictogram via Iconify. Geeft een SVG-URL terug of lege string."""
+def find_icon(hint: str, language: str = "nl") -> str:
+    """Zoek een pictogram via ARASAAC. Geeft de afbeeldings-URL terug of lege string."""
     if not hint.strip():
         return ""
     try:
         resp = requests.get(
-            "https://api.iconify.design/search",
-            params={"query": hint, "limit": 1},
-            timeout=5,
+            f"https://api.arasaac.org/v1/pictograms/{language}/search/{hint}",
+            timeout=8,
         )
         resp.raise_for_status()
-        icons = resp.json().get("icons", [])
-        if not icons:
+        results = resp.json()
+        if not results:
             return ""
-        prefix, name = icons[0].split(":", 1)
-        return f"https://api.iconify.design/{prefix}/{name}.svg"
+        pic_id = results[0]["_id"]
+        return f"https://api.arasaac.org/v1/pictograms/{pic_id}"
     except Exception as e:
         print(f"  [icon] Zoekfout voor '{hint}': {e}")
         return ""
 
 
-def enrich_with_icons(result: dict) -> dict:
+def enrich_with_icons(result: dict, language: str = "nl") -> dict:
     """Voeg image_url toe aan elke optie op basis van image_hint."""
     for node in result["nodes"]:
         for opt_key in ("option_a", "option_b"):
             opt  = node[opt_key]
             hint = opt.get("image_hint", "")
-            url  = find_icon(hint)
+            url  = find_icon(hint, language)
             opt["image_url"] = url
             if url:
                 print(f"  [icon] '{hint}' → {url}")
@@ -174,8 +173,9 @@ def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str) 
     response.raise_for_status()
 
     raw    = response.json().get("response", "")
-    result = parse_and_validate(raw)
-    result = enrich_with_icons(result)
+    language = get(cfg, "ai", "arasaac_language", "nl")
+    result   = parse_and_validate(raw)
+    result   = enrich_with_icons(result, language)
     return result
 
 

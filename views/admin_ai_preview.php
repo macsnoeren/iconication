@@ -274,11 +274,14 @@
                 <select name="nodes[<?= $i ?>][<?= $optKey ?>][next_node_id]" class="preview-select">
                     <option value="">★ Eindpunt (geen volgende node)</option>
                     <?php foreach ($nodes as $targetNode):
-                        $tid = (int)$targetNode['id'];
+                        $tid    = (int)$targetNode['id'];
                         if ($tid === (int)$node['id']) continue;
+                        $labelA = $targetNode['option_a']['label'] ?? '';
+                        $labelB = $targetNode['option_b']['label'] ?? '';
+                        $preview = $labelA && $labelB ? " ($labelA / $labelB)" : '';
                     ?>
                         <option value="<?= $tid ?>" <?= ((int)$nextId === $tid) ? 'selected' : '' ?>>
-                            Node <?= $tid ?>
+                            Node <?= $tid ?><?= htmlspecialchars($preview) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
