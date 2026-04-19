@@ -84,37 +84,41 @@ Gebruik opeenvolgende integer IDs beginnend bij 1."""
 
 DISCOVERY_PROMPT = """Je bent een specialist in augmentatieve en alternatieve communicatie (AAC).
 
-Maak een adaptieve ontdekkers-beslisboom (2 niveaus) die PRECIES 4 opties per node gebruikt.
-De boom helpt bepalen over welk onderwerp een niet-verbale gebruiker wil communiceren.
+Maak een DIEP adaptieve ontdekkers-beslisboom (3-4 niveaus, PRECIES 4 opties per node).
+Doel: achterhalen wat een niet-verbale gebruiker PRECIES wil overbrengen, inclusief complexe intenties zoals:
+- "Ik wil graag buiten wandelen"
+- "Ik wil een spelletje spelen"
+- "Vertel mijn broer dat ik hem graag wil zien"
+- "Ik heb pijn in mijn been"
+- "Ik wil graag muziek luisteren"
+
+Structuur:
+- Niveau 1: Brede categorie (lichaam / activiteit / persoon / gevoel)
+- Niveau 2: Verfijning (welk deel? wat voor activiteit? wie?)
+- Niveau 3: Actie of detail
+- Niveau 4 (leaf): Specifieke intentie met suggested_message
 
 Regels:
-- PRECIES 4 opties per node (options array)
-- Maximaal 2 niveaus diep
-- Labels: simpele, concrete taal, maximaal 5 woorden
-- Alleen visueel voorstelbare concepten
-- image_hint: 1-2 Nederlandse woorden voor ARASAAC pictogramzoekopdracht
-- Eindnodes: next_node_id=null EN target_topic=naam van het communicatie-onderwerp
+- PRECIES 4 opties per node
+- Minimaal 3, maximaal 4 niveaus
+- Labels: max 5 woorden, concreet en visueel
+- image_hint: 1-2 Nederlandse woorden voor ARASAAC
+- Eindnodes: next_node_id=null, target_topic=kort onderwerp, suggested_message=volledige zin
 
-Geef ALLEEN valide JSON terug:
+Voorbeeldblad: {{"label": "Broer uitnodigen", "image_hint": "broer bezoek", "next_node_id": null, "target_topic": "Familie", "suggested_message": "Vertel mijn broer dat ik hem graag wil zien"}}
+Voorbeeldblad: {{"label": "Buiten wandelen", "image_hint": "wandelen buiten", "next_node_id": null, "target_topic": "Wandelen", "suggested_message": "Ik wil graag buiten gaan wandelen"}}
+
+Geef ALLEEN valide JSON terug (geen extra tekst):
 {{
   "topic": "ontdekking",
   "nodes": [
     {{
       "id": 1,
       "options": [
-        {{"label": "Mijn lichaam", "image_hint": "lichaam", "next_node_id": 2}},
-        {{"label": "Eten of drinken", "image_hint": "eten drinken", "next_node_id": 3}},
-        {{"label": "Gevoel of emotie", "image_hint": "gevoel", "next_node_id": 4}},
-        {{"label": "Activiteit", "image_hint": "activiteit", "next_node_id": 5}}
-      ]
-    }},
-    {{
-      "id": 2,
-      "options": [
-        {{"label": "Pijn", "image_hint": "pijn", "next_node_id": null, "target_topic": "Pijn"}},
-        {{"label": "Moe of slaperig", "image_hint": "moe", "next_node_id": null, "target_topic": "Vermoeidheid"}},
-        {{"label": "Ziek", "image_hint": "ziek", "next_node_id": null, "target_topic": "Ziekte"}},
-        {{"label": "Warm of koud", "image_hint": "temperatuur", "next_node_id": null, "target_topic": "Temperatuur"}}
+        {{"label": "Iets met mijn lichaam", "image_hint": "lichaam", "next_node_id": 2}},
+        {{"label": "Ik wil iets doen", "image_hint": "activiteit doen", "next_node_id": 6}},
+        {{"label": "Iets met een persoon", "image_hint": "mensen praten", "next_node_id": 10}},
+        {{"label": "Hoe ik me voel", "image_hint": "gevoel emotie", "next_node_id": 14}}
       ]
     }}
   ]
@@ -145,6 +149,9 @@ def fetch_pending_jobs(php_url: str, api_key: str) -> list:
         timeout=10,
     )
     resp.raise_for_status()
+    text = resp.text.strip()
+    if not text:
+        raise ValueError("Lege respons van server — controleer PHP-fouten of API key")
     return resp.json()
 
 
@@ -229,12 +236,29 @@ def _parse_discovery(content: str) -> dict:
     node_ids = {n["id"] for n in data["nodes"]}
     for node in data["nodes"]:
         opts = node.get("options", [])
-        if len(opts) != 4:
-            raise ValueError(f"Node {node['id']} heeft {len(opts)} opties (verwacht 4)")
-        for opt in opts:
+        if len(opts) < 2:
+            raise ValueError(f"Node {node['id']} heeft te weinig opties ({len(opts)})")
+        # Pad to 4 if AI returned fewer (safety fallback)
+        while len(opts) < 4:
+            opts.append({"label": "...", "image_hint": "meer", "next_node_id": None,
+                         "target_topic": "Overig", "suggested_message": "Ik wil iets anders zeggen"})
+        node["options"] = opts[:4]
+        for opt in node["options"]:
             nxt = opt.get("next_node_id")
             if nxt is not None and nxt not in node_ids:
-                raise ValueError(f"Node {node['id']} verwijst naar onbekende next_node_id {nxt}")
+                opt["next_node_id"] = None  # Fix broken refs instead of crashing
+                if "target_topic" not in opt:
+                    opt["target_topic"] = opt.get("label", "Onderwerp")
+                if "suggested_message" not in opt:
+                    opt["suggested_message"] = "Ik wil " + opt.get("label", "iets").lower()
+    # Ensure all leaf nodes have suggested_message
+    for node in data["nodes"]:
+        for opt in node["options"]:
+            if opt.get("next_node_id") is None:
+                if "suggested_message" not in opt or not opt["suggested_message"]:
+                    opt["suggested_message"] = "Ik wil " + opt.get("label", "iets").lower()
+                if "target_topic" not in opt or not opt["target_topic"]:
+                    opt["target_topic"] = opt.get("label", "Onderwerp")
     return data
 
 
