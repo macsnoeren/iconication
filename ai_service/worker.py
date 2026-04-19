@@ -420,6 +420,89 @@ def run_tune(cfg: configparser.ConfigParser, php_url: str, api_key: str) -> None
         os.unlink(tmp.name)
 
 
+# ─── Dynamische opties generatie ─────────────────────────────────────────────
+
+DYNAMIC_OPTIONS_PROMPT = """Je bent een AAC specialist die real-time communicatie-opties genereert.
+
+De gebruiker heeft eerder deze keuzes gemaakt (in volgorde):
+{history_text}
+
+Genereer nu de meest informatieve vervolgopties.
+Bepaal zelf het aantal (2, 3 of 4) — kies wat het beste past bij de context.
+
+Als de intentie duidelijk genoeg is (je weet wat de gebruiker wil):
+- Zet "is_complete": true
+- Geef 2-4 concrete eindopties, elk met "target_topic" en "suggested_message"
+
+Als je meer informatie nodig hebt:
+- Zet "is_complete": false
+- Geef opties die de intentieruimte maximaal verkleinen
+
+Regels:
+- 2 tot 4 opties (jij bepaalt hoeveel)
+- Labels: max 5 woorden, concreet en visueel voorstelbaar
+- image_hint: 1-2 Nederlandse woorden voor ARASAAC pictogram
+- Geen abstracte begrippen
+
+Voorbeeld niet-compleet (meer info nodig):
+{{
+  "is_complete": false,
+  "options": [
+    {{"label": "Buiten gaan", "image_hint": "buiten natuur"}},
+    {{"label": "Naar winkel", "image_hint": "winkel"}},
+    {{"label": "Naar park", "image_hint": "park"}},
+    {{"label": "Thuis blijven", "image_hint": "huis"}}
+  ]
+}}
+
+Voorbeeld compleet (intentie duidelijk):
+{{
+  "is_complete": true,
+  "options": [
+    {{"label": "Wandelen in park", "image_hint": "wandelen park", "target_topic": "Wandelen", "suggested_message": "Ik wil graag buiten wandelen in het park"}},
+    {{"label": "Fietsen buiten", "image_hint": "fietsen", "target_topic": "Fietsen", "suggested_message": "Ik wil graag buiten fietsen"}},
+    {{"label": "Andere activiteit", "image_hint": "activiteit", "target_topic": "Activiteit buiten", "suggested_message": "Ik wil graag iets buiten doen"}}
+  ]
+}}
+
+Geef ALLEEN valide JSON terug, geen extra tekst."""
+
+
+def generate_dynamic_options(cfg: configparser.ConfigParser, history: list) -> dict:
+    if history:
+        history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(history))
+    else:
+        history_text = "  (geen keuzes gemaakt — dit is het begin van het gesprek)"
+
+    prompt     = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text)
+    ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
+    model      = active_model(cfg)
+
+    response = requests.post(ollama_url,
+                             json={"model": model, "prompt": prompt, "stream": False},
+                             timeout=600)
+    response.raise_for_status()
+    return _parse_dynamic_options(response.json().get("response", ""))
+
+
+def _parse_dynamic_options(content: str) -> dict:
+    match = re.search(r'\{[\s\S]*\}', content)
+    if not match:
+        raise ValueError("Geen valide JSON in dynamic-options respons")
+    data = json.loads(match.group())
+    options     = data.get("options", [])[:4]
+    is_complete = bool(data.get("is_complete", False))
+    if not options:
+        raise ValueError("Geen opties in respons")
+    if is_complete:
+        for opt in options:
+            if not opt.get("suggested_message"):
+                opt["suggested_message"] = "Ik wil " + opt.get("label", "iets").lower()
+            if not opt.get("target_topic"):
+                opt["target_topic"] = opt.get("label", "Onderwerp")
+    return {"is_complete": is_complete, "options": options}
+
+
 # ─── Job verwerking ──────────────────────────────────────────────────────────
 
 def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job: dict) -> None:
@@ -427,31 +510,45 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
     topic      = job["topic"]
     goal       = job.get("goal", "")
     state_json = job.get("state_json") or ""
-
     job_type   = job.get("job_type") or "topic"
+    language   = get(cfg, "ai", "arasaac_language", "nl")
 
     print(f"  → Job #{job_id}: '{topic}' [{job_type}]")
     try:
-        if job_type == "discovery":
-            result = _generate_discovery(cfg)
-        elif state_json.strip() and state_json.strip() != "null":
-            raw = json.loads(state_json)
-            state = IntentState(
-                topic                = raw.get("topic", topic),
-                intent_probabilities = raw.get("intent_probabilities", {}),
-                history              = [(h["node"], "selected", h["label"]) for h in raw.get("history", [])],
-                current_node_id      = raw.get("current_node_id"),
-                completed            = raw.get("completed", False),
-            )
-            print(f"  [followup] intentie: {state.intent_probabilities}")
-            result = generate_followup(cfg, state)
-        else:
-            result = generate_with_ollama(cfg, topic, goal)
+        if job_type == "dynamic_options":
+            raw_state = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
+            history   = raw_state.get("history", [])
+            result    = generate_dynamic_options(cfg, history)
+            for opt in result["options"]:
+                if not opt.get("image_url"):
+                    opt["image_url"] = find_icon(opt.get("image_hint", ""), language)
+            submit_result(php_url, api_key, job_id, result)
+            print(f"  ✓ Job #{job_id} klaar ({len(result['options'])} opties, complete={result['is_complete']})")
 
-        language = get(cfg, "ai", "arasaac_language", "nl")
-        result   = enrich_with_icons(result, language)
-        submit_result(php_url, api_key, job_id, result)
-        print(f"  ✓ Job #{job_id} klaar ({len(result['nodes'])} nodes)")
+        elif job_type == "discovery":
+            result = _generate_discovery(cfg)
+            submit_result(php_url, api_key, job_id, result)
+            print(f"  ✓ Job #{job_id} klaar (discovery, {len(result['nodes'])} nodes)")
+
+        else:
+            # Reguliere topic-boom of follow-up
+            if state_json.strip() and state_json.strip() != "null":
+                raw = json.loads(state_json)
+                state = IntentState(
+                    topic                = raw.get("topic", topic),
+                    intent_probabilities = raw.get("intent_probabilities", {}),
+                    history              = [(h["node"], "selected", h["label"]) for h in raw.get("history", [])],
+                    current_node_id      = raw.get("current_node_id"),
+                    completed            = raw.get("completed", False),
+                )
+                print(f"  [followup] intentie: {state.intent_probabilities}")
+                result = generate_followup(cfg, state)
+            else:
+                result = generate_with_ollama(cfg, topic, goal)
+            result = enrich_with_icons(result, language)
+            submit_result(php_url, api_key, job_id, result)
+            print(f"  ✓ Job #{job_id} klaar ({len(result['nodes'])} nodes)")
+
     except Exception as e:
         submit_error(php_url, api_key, job_id, str(e))
         print(f"  ✗ Job #{job_id} mislukt: {e}")
