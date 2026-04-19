@@ -107,6 +107,18 @@ if ($action === 'back' && $topicId) {
     (new ApiController())->submitResult();
 } elseif ($action === 'api_training_examples') {
     (new ApiController())->trainingExamples();
+} elseif ($action === 'topic_complete' && $topicId) {
+    $controller->showComplete($topicId);
+} elseif ($action === 'topic_followup' && $topicId) {
+    $controller->requestFollowup($topicId);
+} elseif ($action === 'topic_followup_waiting' && $topicId && isset($_GET['job'])) {
+    $controller->showFollowupWaiting((int)$_GET['job'], $topicId);
+} elseif ($action === 'topic_followup_status' && isset($_GET['job']) && $topicId) {
+    $controller->applyFollowup((int)$_GET['job'], $topicId);
+} elseif ($action === 'topic_followup_start' && $topicId) {
+    $controller->startFollowup($topicId);
+} elseif ($action === 'topic_followup_nav' && $topicId) {
+    $controller->navigateFollowup($topicId);
 } elseif ($topicId && $nodeId) {
     $controller->showNode($topicId, $nodeId);
 } elseif ($topicId) {

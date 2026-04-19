@@ -26,7 +26,7 @@ class ApiController {
     /** GET: geeft alle pending jobs terug. */
     public function pendingJobs(): void {
         $stmt = $this->db->query(
-            "SELECT id, topic, goal FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
+            "SELECT id, topic, goal, state_json FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
         );
         echo json_encode($stmt->fetchAll());
     }

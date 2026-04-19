@@ -45,9 +45,11 @@ class Database {
             goal TEXT DEFAULT '',
             result_json TEXT,
             error_message TEXT,
+            state_json TEXT,
             created_at INTEGER DEFAULT (strftime('%s','now')),
             updated_at INTEGER DEFAULT (strftime('%s','now'))
         )");
+        try { $db->exec("ALTER TABLE ai_jobs ADD COLUMN state_json TEXT"); } catch (\Exception $e) { }
 
         // Seed data if empty
         $count = $db->query("SELECT COUNT(*) FROM topics")->fetchColumn();

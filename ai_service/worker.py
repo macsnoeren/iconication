@@ -22,6 +22,8 @@ import os
 from pathlib import Path
 
 import requests
+from option_generator import generate_followup
+from intent_state import IntentState
 
 # ─── Config laden ────────────────────────────────────────────────────────────
 
@@ -146,10 +148,13 @@ def find_icon(hint: str, language: str = "nl") -> str:
 
 
 def enrich_with_icons(result: dict, language: str = "nl") -> dict:
-    """Voeg image_url toe aan elke optie op basis van image_hint."""
+    """Voeg image_url toe aan elke optie op basis van image_hint (skip als al ingevuld)."""
     for node in result["nodes"]:
         for opt_key in ("option_a", "option_b"):
             opt  = node[opt_key]
+            if opt.get("image_url"):
+                print(f"  [icon] '{opt.get('image_hint', '')}' → behouden ({opt['image_url']})")
+                continue
             hint = opt.get("image_hint", "")
             url  = find_icon(hint, language)
             opt["image_url"] = url
@@ -178,9 +183,7 @@ def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str,
     response.raise_for_status()
 
     raw    = response.json().get("response", "")
-    language = get(cfg, "ai", "arasaac_language", "nl")
-    result   = parse_and_validate(raw)
-    result   = enrich_with_icons(result, language)
+    result = parse_and_validate(raw)
     return result
 
 
@@ -313,14 +316,30 @@ def run_tune(cfg: configparser.ConfigParser, php_url: str, api_key: str) -> None
 # ─── Job verwerking ──────────────────────────────────────────────────────────
 
 def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job: dict) -> None:
-    job_id = job["id"]
-    topic  = job["topic"]
-    goal   = job.get("goal", "")
+    job_id     = job["id"]
+    topic      = job["topic"]
+    goal       = job.get("goal", "")
+    state_json = job.get("state_json") or ""
 
     print(f"  → Job #{job_id}: '{topic}'")
     try:
-        result = generate_with_ollama(cfg, topic, goal)
+        if state_json.strip() and state_json.strip() != "null":
+            # Vervolg-job: herstel IntentState en genereer follow-up tree
+            raw = json.loads(state_json)
+            state = IntentState(
+                topic                = raw.get("topic", topic),
+                intent_probabilities = raw.get("intent_probabilities", {}),
+                history              = [(h["node"], "selected", h["label"]) for h in raw.get("history", [])],
+                current_node_id      = raw.get("current_node_id"),
+                completed            = raw.get("completed", False),
+            )
+            print(f"  [followup] intentie: {state.intent_probabilities}")
+            result = generate_followup(cfg, state)
+        else:
+            result = generate_with_ollama(cfg, topic, goal)
 
+        language = get(cfg, "ai", "arasaac_language", "nl")
+        result   = enrich_with_icons(result, language)
         submit_result(php_url, api_key, job_id, result)
         print(f"  ✓ Job #{job_id} klaar ({len(result['nodes'])} nodes)")
     except Exception as e:
