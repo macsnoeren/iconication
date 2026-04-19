@@ -82,6 +82,43 @@ Node 1 is altijd de root node. next_node_id is null als het een eindpunt is.
 Gebruik opeenvolgende integer IDs beginnend bij 1."""
 
 
+DISCOVERY_PROMPT = """Je bent een specialist in augmentatieve en alternatieve communicatie (AAC).
+Maak een ontdekkers-beslisboom (2-3 niveaus) die helpt bepalen over welk onderwerp een gebruiker wil communiceren.
+
+Regels:
+- PRECIES 2 keuzes per node (option_a en option_b)
+- Maximaal 3 niveaus diep
+- Labels: simpele, concrete taal, maximaal 5 woorden
+- Alleen visueel voorstelbare concepten
+- image_hint: 1-2 Nederlandse woorden voor pictogramzoekopdracht
+- Eindnodes MOETEN een "target_topic" veld hebben: de naam van het communicatie-onderwerp
+
+Geef ALLEEN valide JSON terug:
+{{
+  "topic": "ontdekking",
+  "nodes": [
+    {{
+      "id": 1,
+      "option_a": {{"label": "...", "image_hint": "...", "next_node_id": 2}},
+      "option_b": {{"label": "...", "image_hint": "...", "next_node_id": 3}}
+    }},
+    {{
+      "id": 2,
+      "option_a": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Pijn"}},
+      "option_b": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Eten & Drinken"}}
+    }},
+    {{
+      "id": 3,
+      "option_a": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Gevoelens"}},
+      "option_b": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Activiteit"}}
+    }}
+  ]
+}}
+
+Node 1 is de root. Leaf nodes: next_node_id=null EN target_topic=naam van het onderwerp.
+Gebruik opeenvolgende integer IDs vanaf 1."""
+
+
 def build_prompt(topic: str, goal: str) -> str:
     goal_line = f"Doel: {goal}" if goal.strip() else ""
     return PROMPT_TEMPLATE.format(topic=topic, goal_line=goal_line)
@@ -166,6 +203,14 @@ def enrich_with_icons(result: dict, language: str = "nl") -> dict:
 
 
 # ─── AI generatie via Ollama ──────────────────────────────────────────────────
+
+def _generate_discovery(cfg: configparser.ConfigParser) -> dict:
+    ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
+    model      = active_model(cfg)
+    response   = requests.post(ollama_url, json={"model": model, "prompt": DISCOVERY_PROMPT, "stream": False}, timeout=600)
+    response.raise_for_status()
+    return parse_and_validate(response.json().get("response", ""))
+
 
 def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str,
                          model: str = "") -> dict:
@@ -321,10 +366,13 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
     goal       = job.get("goal", "")
     state_json = job.get("state_json") or ""
 
-    print(f"  → Job #{job_id}: '{topic}'")
+    job_type   = job.get("job_type") or "topic"
+
+    print(f"  → Job #{job_id}: '{topic}' [{job_type}]")
     try:
-        if state_json.strip() and state_json.strip() != "null":
-            # Vervolg-job: herstel IntentState en genereer follow-up tree
+        if job_type == "discovery":
+            result = _generate_discovery(cfg)
+        elif state_json.strip() and state_json.strip() != "null":
             raw = json.loads(state_json)
             state = IntentState(
                 topic                = raw.get("topic", topic),
