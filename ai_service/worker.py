@@ -83,15 +83,17 @@ Gebruik opeenvolgende integer IDs beginnend bij 1."""
 
 
 DISCOVERY_PROMPT = """Je bent een specialist in augmentatieve en alternatieve communicatie (AAC).
-Maak een ontdekkers-beslisboom (2-3 niveaus) die helpt bepalen over welk onderwerp een gebruiker wil communiceren.
+
+Maak een adaptieve ontdekkers-beslisboom (2 niveaus) die PRECIES 4 opties per node gebruikt.
+De boom helpt bepalen over welk onderwerp een niet-verbale gebruiker wil communiceren.
 
 Regels:
-- PRECIES 2 keuzes per node (option_a en option_b)
-- Maximaal 3 niveaus diep
+- PRECIES 4 opties per node (options array)
+- Maximaal 2 niveaus diep
 - Labels: simpele, concrete taal, maximaal 5 woorden
 - Alleen visueel voorstelbare concepten
-- image_hint: 1-2 Nederlandse woorden voor pictogramzoekopdracht
-- Eindnodes MOETEN een "target_topic" veld hebben: de naam van het communicatie-onderwerp
+- image_hint: 1-2 Nederlandse woorden voor ARASAAC pictogramzoekopdracht
+- Eindnodes: next_node_id=null EN target_topic=naam van het communicatie-onderwerp
 
 Geef ALLEEN valide JSON terug:
 {{
@@ -99,24 +101,26 @@ Geef ALLEEN valide JSON terug:
   "nodes": [
     {{
       "id": 1,
-      "option_a": {{"label": "...", "image_hint": "...", "next_node_id": 2}},
-      "option_b": {{"label": "...", "image_hint": "...", "next_node_id": 3}}
+      "options": [
+        {{"label": "Mijn lichaam", "image_hint": "lichaam", "next_node_id": 2}},
+        {{"label": "Eten of drinken", "image_hint": "eten drinken", "next_node_id": 3}},
+        {{"label": "Gevoel of emotie", "image_hint": "gevoel", "next_node_id": 4}},
+        {{"label": "Activiteit", "image_hint": "activiteit", "next_node_id": 5}}
+      ]
     }},
     {{
       "id": 2,
-      "option_a": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Pijn"}},
-      "option_b": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Eten & Drinken"}}
-    }},
-    {{
-      "id": 3,
-      "option_a": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Gevoelens"}},
-      "option_b": {{"label": "...", "image_hint": "...", "next_node_id": null, "target_topic": "Activiteit"}}
+      "options": [
+        {{"label": "Pijn", "image_hint": "pijn", "next_node_id": null, "target_topic": "Pijn"}},
+        {{"label": "Moe of slaperig", "image_hint": "moe", "next_node_id": null, "target_topic": "Vermoeidheid"}},
+        {{"label": "Ziek", "image_hint": "ziek", "next_node_id": null, "target_topic": "Ziekte"}},
+        {{"label": "Warm of koud", "image_hint": "temperatuur", "next_node_id": null, "target_topic": "Temperatuur"}}
+      ]
     }}
   ]
 }}
 
-Node 1 is de root. Leaf nodes: next_node_id=null EN target_topic=naam van het onderwerp.
-Gebruik opeenvolgende integer IDs vanaf 1."""
+Gebruik opeenvolgende integer IDs vanaf 1. Elke node heeft PRECIES 4 opties."""
 
 
 def build_prompt(topic: str, goal: str) -> str:
@@ -209,7 +213,41 @@ def _generate_discovery(cfg: configparser.ConfigParser) -> dict:
     model      = active_model(cfg)
     response   = requests.post(ollama_url, json={"model": model, "prompt": DISCOVERY_PROMPT, "stream": False}, timeout=600)
     response.raise_for_status()
-    return parse_and_validate(response.json().get("response", ""))
+    raw  = response.json().get("response", "")
+    data = _parse_discovery(raw)
+    language = get(cfg, "ai", "arasaac_language", "nl")
+    return _enrich_discovery(data, language)
+
+
+def _parse_discovery(content: str) -> dict:
+    match = re.search(r'\{[\s\S]*\}', content)
+    if not match:
+        raise ValueError("Geen valide JSON in discovery-respons")
+    data = json.loads(match.group())
+    if "nodes" not in data or not data["nodes"]:
+        raise ValueError("Discovery tree bevat geen nodes")
+    node_ids = {n["id"] for n in data["nodes"]}
+    for node in data["nodes"]:
+        opts = node.get("options", [])
+        if len(opts) != 4:
+            raise ValueError(f"Node {node['id']} heeft {len(opts)} opties (verwacht 4)")
+        for opt in opts:
+            nxt = opt.get("next_node_id")
+            if nxt is not None and nxt not in node_ids:
+                raise ValueError(f"Node {node['id']} verwijst naar onbekende next_node_id {nxt}")
+    return data
+
+
+def _enrich_discovery(data: dict, language: str) -> dict:
+    for node in data["nodes"]:
+        for opt in node.get("options", []):
+            if opt.get("image_url"):
+                continue
+            hint = opt.get("image_hint", "")
+            url  = find_icon(hint, language)
+            opt["image_url"] = url
+            print(f"  [icon/disc] '{hint}' → {url or 'geen'}")
+    return data
 
 
 def generate_with_ollama(cfg: configparser.ConfigParser, topic: str, goal: str,
