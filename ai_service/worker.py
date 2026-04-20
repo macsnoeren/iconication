@@ -439,7 +439,10 @@ Al eerder getoonde opties (NIET herhalen, tenzij echt onvermijdelijk):
 
 Jouw taak:
 1. Bedenk wat de gebruiker PRECIES wil zeggen op basis van de selecties.
-2. Geef PRECIES 3 NIEUWE, SPECIFIEKE vervolgopties die de intentie verder verfijnen.
+2. Geef PRECIES 3 vervolgopties, gesorteerd van MEEST voor de hand liggend naar minst voor de hand liggend.
+   - Optie 1: de meest waarschijnlijke, meest voorkomende keuze
+   - Optie 2: een logische variant of tweede keuze
+   - Optie 3: een minder voor de hand liggende maar relevante optie
 3. Vermijd vage of generieke opties zoals "Iets anders doen" of "Meer opties".
 4. Geef NOOIT opties die al in de "Al eerder getoonde opties" lijst staan.
 4. Als de intentie al duidelijk genoeg is: geef concrete eindopties met een volledige zin.
