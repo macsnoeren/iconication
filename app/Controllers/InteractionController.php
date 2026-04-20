@@ -13,14 +13,15 @@ use App\Core\Database;
 class InteractionController
 {
     private SessionManager $sessions;
+    private IntentEngine   $engine;
 
     public function __construct()
     {
-        $trees   = new TreeRepository();
-        $model   = new IntentModel();
-        $profiles = new ProfileRepository();
-        $engine  = new IntentEngine($trees, $model, $profiles);
-        $this->sessions = new SessionManager($trees, $engine);
+        $trees          = new TreeRepository();
+        $model          = new IntentModel();
+        $profiles       = new ProfileRepository();
+        $this->engine   = new IntentEngine($trees, $model, $profiles);
+        $this->sessions = new SessionManager($trees, $this->engine);
     }
 
     // ── Start nieuwe sessie ───────────────────────────────────────────────────
@@ -28,24 +29,35 @@ class InteractionController
     {
         $profileId    = (int)($_GET['profile'] ?? 1);
         $forcedTreeId = $forcedTreeId ?: (int)($_GET['tree'] ?? 0);
-        $session      = $this->sessions->start($profileId, $forcedTreeId);
-        $_SESSION['session_id'] = $session->id;
 
-        $trees  = new TreeRepository();
-        $model  = new IntentModel();
-        $engine = new IntentEngine($trees, $model, new ProfileRepository());
-        $result = $engine->getNextOptions($session, null);
+        try {
+            $session = $this->sessions->start($profileId, $forcedTreeId);
+            $_SESSION['session_id'] = $session->id;
 
-        if ($result->isPending) {
-            $this->render('session_waiting', [
-                'jobId'    => $result->jobId,
-                'sentence' => '',
-                'view'     => 'session_waiting',
-            ]);
-            return;
+            $result = $this->engine->getNextOptions($session, null);
+
+            if ($result->isPending) {
+                $this->render('session_waiting', [
+                    'jobId'    => $result->jobId,
+                    'sentence' => '',
+                    'view'     => 'session_waiting',
+                ]);
+                return;
+            }
+
+            if (empty($result->options)) {
+                // Geen opties beschikbaar (bv. lege statische boom)
+                $this->redirectHome();
+                return;
+            }
+
+            $this->renderSession($session->id, $result->options, '');
+
+        } catch (\Throwable $e) {
+            // Toon fout zichtbaar in plaats van stilletjes te redirecten
+            error_log('InteractionController::start error: ' . $e->getMessage());
+            $this->render('error', ['message' => $e->getMessage(), 'view' => 'error']);
         }
-
-        $this->renderSession($session->id, $result->options, '');
     }
 
     // ── Gebruiker selecteert een optie ────────────────────────────────────────
@@ -56,27 +68,33 @@ class InteractionController
 
         if (!$sessionId || !$nodeId) { $this->redirectHome(); return; }
 
-        $result = $this->sessions->select($sessionId, $nodeId);
+        try {
+            $result = $this->sessions->select($sessionId, $nodeId);
 
-        if ($result->newState === 'CONFIRMING') {
-            $this->render('session_confirm', [
-                'sentence'         => $result->sentence,
-                'suggestedMessage' => $result->suggestedMessage,
-                'view'             => 'session_confirm',
-            ]);
-            return;
+            if ($result->newState === 'CONFIRMING') {
+                $this->render('session_confirm', [
+                    'sentence'         => $result->sentence,
+                    'suggestedMessage' => $result->suggestedMessage,
+                    'view'             => 'session_confirm',
+                ]);
+                return;
+            }
+
+            if ($result->options->isPending) {
+                $this->render('session_waiting', [
+                    'jobId'    => $result->options->jobId,
+                    'sentence' => $result->sentence,
+                    'view'     => 'session_waiting',
+                ]);
+                return;
+            }
+
+            $this->renderSession($sessionId, $result->options->options, $result->sentence);
+
+        } catch (\Throwable $e) {
+            error_log('InteractionController::select error: ' . $e->getMessage());
+            $this->render('error', ['message' => $e->getMessage(), 'view' => 'error']);
         }
-
-        if ($result->options->isPending) {
-            $this->render('session_waiting', [
-                'jobId'    => $result->options->jobId,
-                'sentence' => $result->sentence,
-                'view'     => 'session_waiting',
-            ]);
-            return;
-        }
-
-        $this->renderSession($sessionId, $result->options->options, $result->sentence);
     }
 
     // ── Stap terug ────────────────────────────────────────────────────────────
@@ -150,36 +168,37 @@ class InteractionController
         $stmt->execute([$jobId]);
         $job  = $stmt->fetch();
 
-        if (!$job || $job['status'] === 'pending' || $job['status'] === 'processing') {
+        if (!$job || in_array($job['status'], ['pending', 'processing'], true)) {
             echo json_encode(['status' => 'pending']); return;
         }
 
-        if ($job['status'] === 'failed') {
+        if (in_array($job['status'], ['failed', 'error'], true)) {
             echo json_encode(['status' => 'failed']); return;
         }
 
-        // Job klaar: verwerk resultaat en sla nodes op
-        $data       = json_decode($job['result_json'], true);
-        $isComplete = (bool)($data['is_complete'] ?? false);
-        $rawOptions = $data['options'] ?? [];
+        // Job klaar: verwerk resultaat, sla nodes op, zet sessie-vars VOOR output
+        try {
+            $data       = json_decode($job['result_json'], true);
+            $isComplete = (bool)($data['is_complete'] ?? false);
+            $rawOptions = $data['options'] ?? [];
 
-        $aiOptions = array_map(fn($opt) => [
-            'label'             => $opt['label'] ?? '',
-            'image_url'         => $opt['image_url'] ?? null,
-            'is_leaf'           => $isComplete ? 1 : 0,
-            'suggested_message' => $opt['suggested_message'] ?? null,
-        ], $rawOptions);
+            $aiOptions = array_map(fn($opt) => [
+                'label'             => $opt['label'] ?? '',
+                'image_url'         => $opt['image_url'] ?? null,
+                'is_leaf'           => $isComplete ? 1 : 0,
+                'suggested_message' => $opt['suggested_message'] ?? null,
+            ], $rawOptions);
 
-        $result = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
+            $result = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
 
-        echo json_encode([
-            'status'   => 'done',
-            'redirect' => BASE_URL . '?action=session_show',
-        ]);
+            $_SESSION['pending_options']  = $result->options->options;
+            $_SESSION['pending_sentence'] = $result->sentence;
 
-        // Sla opties tijdelijk in sessie op zodat session_show ze kan tonen
-        $_SESSION['pending_options']  = $result->options->options;
-        $_SESSION['pending_sentence'] = $result->sentence;
+            echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_show']);
+        } catch (\Throwable $e) {
+            error_log('dynamicStatus error: ' . $e->getMessage());
+            echo json_encode(['status' => 'failed']);
+        }
     }
 
     // ── Toon opties na dynamic poll ───────────────────────────────────────────
