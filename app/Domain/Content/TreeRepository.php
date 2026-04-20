@@ -80,6 +80,14 @@ class TreeRepository
     public function insertDynamicNodes(int $treeId, ?int $parentId, int $depth, array $options): array
     {
         $db  = Database::getConnection();
+
+        // Verwijder bestaande kinderen op dit niveau zodat "Iets anders" geen
+        // opeenstapeling van oude + nieuwe opties geeft.
+        $db->prepare(
+            "DELETE FROM tree_nodes WHERE tree_id = ? AND " .
+            ($parentId === null ? "parent_id IS NULL" : "parent_id = ?")
+        )->execute($parentId === null ? [$treeId] : [$treeId, $parentId]);
+
         $ids = [];
         foreach ($options as $i => $opt) {
             $stmt = $db->prepare(
