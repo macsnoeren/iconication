@@ -539,6 +539,87 @@ class AdminController {
         exit;
     }
 
+    // ── Tree node beheer ─────────────────────────────────────────────────────
+
+    public function showTreeNodes(int $treeId): void
+    {
+        $stmt = $this->db->prepare("SELECT * FROM option_trees WHERE id = ?");
+        $stmt->execute([$treeId]);
+        $tree = $stmt->fetch();
+        if (!$tree) { header("Location: " . BASE_URL . "?action=admin"); exit; }
+
+        // Haal nodes op met parent-label voor context
+        $stmt = $this->db->prepare(
+            "SELECT n.*, p.label AS parent_label
+             FROM tree_nodes n
+             LEFT JOIN tree_nodes p ON p.id = n.parent_id
+             WHERE n.tree_id = ?
+             ORDER BY n.depth ASC, n.sort_order ASC"
+        );
+        $stmt->execute([$treeId]);
+        $nodes = $stmt->fetchAll();
+
+        $view = 'admin_tree_nodes';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    public function editTreeNode(int $nodeId): void
+    {
+        $stmt = $this->db->prepare("SELECT * FROM tree_nodes WHERE id = ?");
+        $stmt->execute([$nodeId]);
+        $node = $stmt->fetch();
+        if (!$node) { header("Location: " . BASE_URL . "?action=admin"); exit; }
+
+        $view = 'admin_edit_tree_node';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    public function saveTreeNode(int $nodeId): void
+    {
+        $label            = mb_substr(trim($_POST['label'] ?? ''), 0, 100);
+        $imageUrl         = mb_substr(trim($_POST['image_url'] ?? ''), 0, 500);
+        $suggestedMessage = mb_substr(trim($_POST['suggested_message'] ?? ''), 0, 500);
+        $isLeaf           = isset($_POST['is_leaf']) ? 1 : 0;
+
+        $stmt = $this->db->prepare(
+            "SELECT tree_id FROM tree_nodes WHERE id = ?"
+        );
+        $stmt->execute([$nodeId]);
+        $row = $stmt->fetch();
+        $treeId = $row ? (int)$row['tree_id'] : 0;
+
+        $this->db->prepare(
+            "UPDATE tree_nodes SET label = ?, image_url = ?, suggested_message = ?, is_leaf = ? WHERE id = ?"
+        )->execute([$label, $imageUrl, $suggestedMessage ?: null, $isLeaf, $nodeId]);
+
+        header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId");
+        exit;
+    }
+
+    public function deleteTreeNode(int $nodeId): void
+    {
+        $stmt = $this->db->prepare("SELECT tree_id FROM tree_nodes WHERE id = ?");
+        $stmt->execute([$nodeId]);
+        $row = $stmt->fetch();
+        $treeId = $row ? (int)$row['tree_id'] : 0;
+
+        // Verwijder ook alle kinderen recursief
+        $this->deleteNodeRecursive($nodeId);
+
+        header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId");
+        exit;
+    }
+
+    private function deleteNodeRecursive(int $nodeId): void
+    {
+        $stmt = $this->db->prepare("SELECT id FROM tree_nodes WHERE parent_id = ?");
+        $stmt->execute([$nodeId]);
+        foreach ($stmt->fetchAll(\PDO::FETCH_COLUMN) as $childId) {
+            $this->deleteNodeRecursive((int)$childId);
+        }
+        $this->db->prepare("DELETE FROM tree_nodes WHERE id = ?")->execute([$nodeId]);
+    }
+
     // ── Sync helpers ──────────────────────────────────────────────────────────
 
     // Synchroniseert een topic uit de oude tabellen naar option_trees/tree_nodes.

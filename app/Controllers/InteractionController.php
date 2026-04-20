@@ -215,26 +215,22 @@ class InteractionController
             }
         }
 
-        // Geen actieve sessie — toon home of start direct
-        $trees = (new \App\Domain\Content\TreeRepository())->getAllReady();
-
-        // Als er een dynamische boom klaar staat: start meteen
+        // Geen actieve sessie — toon altijd het keuzescherm
+        $trees       = (new \App\Domain\Content\TreeRepository())->getAllReady();
+        $dynamicTree = null;
+        $staticTrees = [];
         foreach ($trees as $tree) {
             if ($tree['generation_mode'] === 'dynamic') {
-                $this->start((int)$tree['id']);
-                return;
+                $dynamicTree = $tree;
+            } else {
+                $staticTrees[] = $tree;
             }
         }
-
-        // Meerdere statische bomen → keuzescherm
-        if (count($trees) > 1) {
-            $this->render('home', ['trees' => $trees, 'view' => 'home']);
-            return;
-        }
-
-        // Één boom → direct starten
-        $treeId = !empty($trees) ? (int)$trees[0]['id'] : 0;
-        $this->start($treeId);
+        $this->render('home', [
+            'dynamicTree' => $dynamicTree,
+            'staticTrees' => $staticTrees,
+            'view'        => 'home',
+        ]);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

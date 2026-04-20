@@ -21,6 +21,11 @@ class IntentEngine
         $mode = $this->trees->getGenerationMode($session->treeId);
 
         if ($mode === 'dynamic') {
+            // Hergebruik bestaande nodes als die al gegenereerd zijn voor deze parent
+            $existing = $this->trees->getChildren($session->treeId, $parentNodeId);
+            if (!empty($existing)) {
+                return OptionsResult::immediate($this->scoreAndSort($existing, $session));
+            }
             $jobId = $this->queueDynamicOptions($session, $parentNodeId);
             return OptionsResult::pending($jobId);
         }
@@ -31,16 +36,17 @@ class IntentEngine
     private function getStaticOptions(Session $session, ?int $parentNodeId): array
     {
         $candidates = $this->trees->getChildren($session->treeId, $parentNodeId);
+        return $this->scoreAndSort($candidates, $session);
+    }
 
+    private function scoreAndSort(array $candidates, Session $session): array
+    {
         foreach ($candidates as &$node) {
             $node['score'] = $this->score($node, $session);
         }
         unset($node);
-
         usort($candidates, fn($a, $b) => $b['score'] <=> $a['score']);
-
-        $limit = $this->limitForProfile($session->profileId);
-        return array_slice($candidates, 0, $limit);
+        return array_slice($candidates, 0, $this->limitForProfile($session->profileId));
     }
 
     private function score(array $node, Session $session): float

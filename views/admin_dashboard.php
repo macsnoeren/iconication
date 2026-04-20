@@ -62,13 +62,17 @@ $activeTree  = reset($activeTree) ?: null;
                         <?php endif; ?>
                     </td>
                     <td>
-                        <?php if ($tree['generation_mode'] === 'dynamic'): ?>
-                            <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=static"
-                               class="btn" style="padding:5px 12px; font-size:.8rem;">Zet statisch</a>
-                        <?php else: ?>
-                            <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=dynamic"
-                               class="btn btn--accent" style="padding:5px 12px; font-size:.8rem;">Zet AI</a>
-                        <?php endif; ?>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            <a href="<?= BASE_URL ?>?action=admin_tree_nodes&tree=<?= $tree['id'] ?>"
+                               class="btn btn--accent" style="padding:5px 12px; font-size:.8rem;">Opties</a>
+                            <?php if ($tree['generation_mode'] === 'dynamic'): ?>
+                                <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=static"
+                                   class="btn" style="padding:5px 12px; font-size:.8rem;">Zet statisch</a>
+                            <?php else: ?>
+                                <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=dynamic"
+                                   class="btn btn--purple" style="padding:5px 12px; font-size:.8rem;">Zet AI</a>
+                            <?php endif; ?>
+                        </div>
                     </td>
                 </tr>
             <?php endforeach; ?>
