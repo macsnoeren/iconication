@@ -107,6 +107,40 @@ if ($action === 'back' && $topicId) {
     (new ApiController())->submitResult();
 } elseif ($action === 'api_training_examples') {
     (new ApiController())->trainingExamples();
+} elseif ($action === 'admin_regenerate_discovery') {
+    header('Content-Type: application/json');
+    // Verwijder oude discovery tree en queue nieuwe generatie
+    $discPath = dirname(__DIR__) . '/storage/discovery_tree.json';
+    if (file_exists($discPath)) unlink($discPath);
+    $stmt = $db->prepare("INSERT INTO ai_jobs (topic, goal, job_type) VALUES ('Ontdekking', 'Genereer ontdekkers-boom', 'discovery')");
+    $stmt->execute();
+    $jobId = (int)$db->lastInsertId();
+    echo json_encode(['redirect' => BASE_URL . "?action=discovery_waiting&job=$jobId"]);
+    exit;
+} elseif ($action === 'dynamic_status' && isset($_GET['job'])) {
+    $controller->dynamicStatus((int)$_GET['job']);
+} elseif ($action === 'dynamic_show') {
+    $controller->showDynamic();
+} elseif ($action === 'dynamic_select') {
+    $controller->selectDynamic();
+} elseif ($action === 'dynamic_back') {
+    $controller->backDynamic();
+} elseif ($action === 'start_discovery') {
+    $controller->startDiscovery();
+} elseif ($action === 'discovery_nav') {
+    $controller->navigateDiscovery();
+} elseif ($action === 'discovery_confirm') {
+    $controller->showDiscoveryConfirm();
+} elseif ($action === 'discovery_confirm_yes') {
+    $controller->confirmDiscoveryYes();
+} elseif ($action === 'discovery_waiting' && isset($_GET['job'])) {
+    $controller->discoveryWaiting((int)$_GET['job']);
+} elseif ($action === 'discovery_waiting_status' && isset($_GET['job'])) {
+    $controller->discoveryWaitingStatus((int)$_GET['job']);
+} elseif ($action === 'discovery_topic_waiting' && isset($_GET['job'])) {
+    $controller->discoveryTopicWaiting((int)$_GET['job'], $_GET['topic_name'] ?? '');
+} elseif ($action === 'discovery_topic_status' && isset($_GET['job'])) {
+    $controller->discoveryTopicStatus((int)$_GET['job'], $_GET['topic_name'] ?? '');
 } elseif ($action === 'topic_complete' && $topicId) {
     $controller->showComplete($topicId);
 } elseif ($action === 'topic_followup' && $topicId) {
@@ -123,10 +157,7 @@ if ($action === 'back' && $topicId) {
     $controller->showNode($topicId, $nodeId);
 } elseif ($topicId) {
     $controller->start($topicId);
-} elseif (empty($_GET)) {
-    $controller->index();
 } else {
-    http_response_code(404);
-    echo "<h1>404 - Pagina niet gevonden</h1>";
-    echo "<a href='" . BASE_URL . "'>Ga terug naar start</a>";
+    // Alles wat niet gematcht is, inclusief lege GET: start de dynamische AI-stroom
+    $controller->index();
 }

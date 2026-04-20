@@ -25,10 +25,24 @@ class ApiController {
 
     /** GET: geeft alle pending jobs terug. */
     public function pendingJobs(): void {
-        $stmt = $this->db->query(
-            "SELECT id, topic, goal, state_json FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
-        );
-        echo json_encode($stmt->fetchAll());
+        try {
+            $stmt = $this->db->query(
+                "SELECT id, topic, goal, state_json, job_type FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
+            );
+            echo json_encode($stmt->fetchAll());
+        } catch (\Exception $e) {
+            // Fallback: kolom job_type ontbreekt in oude DB — gebruik query zonder die kolom
+            try {
+                $stmt = $this->db->query(
+                    "SELECT id, topic, goal, state_json FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
+                );
+                $rows = $stmt->fetchAll();
+                foreach ($rows as &$r) { $r['job_type'] = 'topic'; }
+                echo json_encode($rows);
+            } catch (\Exception $e2) {
+                echo json_encode([]);
+            }
+        }
     }
 
     /** GET: geeft alle training-voorbeelden terug als JSON (topic + volledige boom). */

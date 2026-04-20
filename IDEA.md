@@ -1,0 +1,1 @@
+- Ook meenemen dat iemand een verhaal over de persoon kan vertellen hoe die is wat zijn interesses zijn ed. Om de icon generator nog beter te laten worden.

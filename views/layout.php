@@ -12,12 +12,15 @@
         /* Alleen het navigatiescherm (node.php / home.php) vult de volledige viewport zonder scrollen */
         body.fullscreen { height: 100vh; overflow: hidden; }
         body.fullscreen .container { overflow: hidden; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; flex: 1; }
-        .card { background: white; border: 8px solid #ddd; border-radius: 30px; display: flex; flex-direction: column; 
-                align-items: center; justify-content: center; text-decoration: none; color: #333; transition: transform 0.1s; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; }
+        .grid--4 { grid-template-rows: 1fr 1fr; }
+        .card { background: white; border: 8px solid #ddd; border-radius: 24px; display: flex; flex-direction: column;
+                align-items: center; justify-content: center; text-decoration: none; color: #333; transition: transform 0.1s;
+                overflow: hidden; min-height: 0; padding: 8px; }
         .card:active { transform: scale(0.96); border-color: var(--accent); }
-        .card img { max-width: 65%; max-height: 55%; object-fit: contain; }
-        .card span { font-size: 2.5rem; font-weight: bold; margin-top: 15px; }
+        .card img { max-width: 60%; max-height: 50%; object-fit: contain; flex-shrink: 0; }
+        .card span { font-size: 2.5rem; font-weight: bold; margin-top: 10px; text-align: center; line-height: 1.2; }
+        .card--sm span { font-size: 1.5rem; margin-top: 6px; }
         .card--end { border-color: #27ae60; }
         .card--end:active { border-color: #1e8449; }
         .end-badge { margin-top: 8px; background: #27ae60; color: white; border-radius: 20px; padding: 4px 16px; font-size: 1.1rem; font-weight: bold; }
@@ -27,10 +30,15 @@
                      text-decoration: none; color: var(--primary); font-size: 2rem; font-weight: bold; border: 4px solid #ccc; }
     </style>
 </head>
-<body<?= in_array($view ?? '', ['home', 'node']) ? ' class="fullscreen"' : '' ?>>
+<body<?= in_array($view ?? '', ['node', 'followup_node', 'discovery_node', 'dynamic_options', 'dynamic_waiting']) ? ' class="fullscreen"' : '' ?>>
     <div class="header">
-        <?php if($view !== 'home'): ?>
-            <a href="<?= BASE_URL ?>?topic=<?= $topicId ?>&action=back" class="btn">⬅ Terug</a>
+        <?php if(!in_array($view ?? '', ['discovery_node', 'discovery_waiting', 'discovery_confirm',
+                                          'dynamic_options', 'dynamic_waiting', 'home'])): ?>
+            <?php if(($topicId ?? 0) > 0): ?>
+                <a href="<?= BASE_URL ?>?topic=<?= $topicId ?>&action=back" class="btn">⬅ Terug</a>
+            <?php else: ?>
+                <a href="<?= BASE_URL ?>" class="btn">⬅ Terug</a>
+            <?php endif; ?>
         <?php endif; ?>
         <div style="font-size: 1.5rem;">Iconication 
             <?php if(isset($_SESSION['username'])): ?>

@@ -13,9 +13,7 @@ class TopicController {
     }
 
     public function index(): void {
-        $stmt = $this->db->query("SELECT * FROM topics");
-        $topics = $stmt->fetchAll();
-        $this->render('home', ['topics' => $topics]);
+        $this->startDynamic();
     }
 
     public function start(int $id): void {
@@ -263,6 +261,368 @@ class TopicController {
             foreach ($state['intent_probabilities'] as &$p) { $p /= $total; }
         }
     }
+
+    // ─── Dynamische opties (kern van het systeem) ─────────────────────────────
+
+    /** Start een nieuwe sessie: lege geschiedenis, maak eerste dynamic_options job aan. */
+    public function startDynamic(): void {
+        $_SESSION['dynamic_history']      = [];
+        $_SESSION['dynamic_options']      = [];
+        $_SESSION['dynamic_options_stack'] = [];
+        $_SESSION['dynamic_is_complete']  = false;
+        $_SESSION['intent_state'] = [
+            'topic' => 'Ontdekking', 'intent_probabilities' => [],
+            'history' => [], 'current_node_id' => null,
+            'completed' => false, 'topic_id' => 0,
+        ];
+        $jobId = $this->queueDynamicOptions([]);
+        $this->render('dynamic_waiting', ['jobId' => $jobId, 'topicId' => 0, 'sentence' => '']);
+    }
+
+    /** Polling-endpoint: geeft status terug en slaat opties op in sessie als job klaar is. */
+    public function dynamicStatus(int $jobId): void {
+        header('Content-Type: application/json');
+        $stmt = $this->db->prepare("SELECT status, result_json, error_message FROM ai_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch();
+        if (!$job)                      { echo json_encode(['status' => 'error', 'error' => 'niet gevonden']); exit; }
+        if ($job['status'] === 'error') { echo json_encode(['status' => 'error', 'error' => $job['error_message']]); exit; }
+        if ($job['status'] !== 'done')  { echo json_encode(['status' => 'pending']); exit; }
+
+        $result = json_decode($job['result_json'], true);
+        // Sla opties op in sessie (stack voor back-knop)
+        if (!empty($_SESSION['dynamic_options'])) {
+            $_SESSION['dynamic_options_stack'][] = $_SESSION['dynamic_options'];
+        }
+        $_SESSION['dynamic_options']     = $result['options'];
+        $_SESSION['dynamic_is_complete'] = (bool)($result['is_complete'] ?? false);
+        echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=dynamic_show']);
+    }
+
+    /** Toont de huidige set opties. */
+    public function showDynamic(): void {
+        $options    = $_SESSION['dynamic_options'] ?? [];
+        $isComplete = $_SESSION['dynamic_is_complete'] ?? false;
+        $history    = $_SESSION['dynamic_history'] ?? [];
+        $sentence   = $this->buildCandidateSentence($history);
+
+        if (empty($options)) { $this->startDynamic(); return; }
+
+        $this->render('dynamic_options', [
+            'topicId'    => 0,
+            'options'    => $options,
+            'isComplete' => $isComplete,
+            'sentence'   => $sentence,
+            'canGoBack'  => !empty($_SESSION['dynamic_options_stack']),
+        ]);
+    }
+
+    /** Verwerkt een keuze: update staat, maak volgende job aan. */
+    public function selectDynamic(): void {
+        $optIdx  = isset($_GET['oidx']) ? (int)$_GET['oidx'] : -1;
+        $options = $_SESSION['dynamic_options'] ?? [];
+        $opt     = ($optIdx >= 0 && isset($options[$optIdx])) ? $options[$optIdx] : null;
+        if (!$opt) { header("Location: " . BASE_URL . "?action=dynamic_show"); exit; }
+
+        // Voeg toe aan geschiedenis
+        $history   = $_SESSION['dynamic_history'] ?? [];
+        $history[] = $opt['label'];
+        $_SESSION['dynamic_history'] = $history;
+
+        // Update intent state
+        if (isset($_SESSION['intent_state'])) {
+            $state = &$_SESSION['intent_state'];
+            $state['history'][] = ['node' => 0, 'label' => $opt['label']];
+            $this->updateProbabilities($state, $opt['label']);
+        }
+
+        $isComplete = $_SESSION['dynamic_is_complete'] ?? false;
+        if ($isComplete || !empty($opt['suggested_message'])) {
+            // Eindoptie gekozen → bevestigingsscherm
+            $_SESSION['discovery_confirm'] = [
+                'target_topic'      => $opt['target_topic'] ?? $opt['label'],
+                'suggested_message' => $opt['suggested_message'] ?? 'Ik wil ' . strtolower($opt['label']),
+            ];
+            header("Location: " . BASE_URL . "?action=discovery_confirm");
+            exit;
+        }
+
+        // Nog niet compleet → genereer volgende opties
+        $jobId = $this->queueDynamicOptions($history);
+        $sentence = $this->buildCandidateSentence($history);
+        $this->render('dynamic_waiting', ['jobId' => $jobId, 'topicId' => 0, 'sentence' => $sentence]);
+    }
+
+    /** Terug naar vorige set opties (geen AI-call nodig). */
+    public function backDynamic(): void {
+        $stack = $_SESSION['dynamic_options_stack'] ?? [];
+        if (empty($stack)) { $this->startDynamic(); return; }
+
+        $prev = array_pop($stack);
+        $_SESSION['dynamic_options_stack'] = $stack;
+        $_SESSION['dynamic_options']       = $prev;
+        $_SESSION['dynamic_is_complete']   = false;
+
+        // Verwijder laatste item uit geschiedenis
+        $history = $_SESSION['dynamic_history'] ?? [];
+        array_pop($history);
+        $_SESSION['dynamic_history'] = $history;
+
+        // Herstel intent state
+        if (isset($_SESSION['intent_state'])) {
+            $histItems = $_SESSION['intent_state']['history'] ?? [];
+            array_pop($histItems);
+            $_SESSION['intent_state']['history'] = $histItems;
+        }
+
+        header("Location: " . BASE_URL . "?action=dynamic_show");
+        exit;
+    }
+
+    private function queueDynamicOptions(array $history): int {
+        $stateJson = json_encode(['history' => $history]);
+        $stmt = $this->db->prepare(
+            "INSERT INTO ai_jobs (topic, goal, job_type, state_json) VALUES ('Ontdekking', '', 'dynamic_options', ?)"
+        );
+        $stmt->execute([$stateJson]);
+        return (int)$this->db->lastInsertId();
+    }
+
+    // ─── Discovery (statische boom — behouden als fallback) ───────────────────
+
+    public function startDiscovery(): void {
+        $tree = $this->loadDiscoveryTree();
+        if (!$tree) {
+            $this->queueDiscovery();
+            return;
+        }
+        $nodeMap = [];
+        foreach ($tree['nodes'] as $n) { $nodeMap[$n['id']] = $n; }
+        $_SESSION['discovery_nodeMap'] = $nodeMap;
+        $_SESSION['intent_state'] = [
+            'topic' => 'Ontdekking', 'intent_probabilities' => [],
+            'history' => [], 'current_node_id' => $tree['nodes'][0]['id'],
+            'completed' => false, 'topic_id' => 0,
+        ];
+        $this->render('discovery_node', [
+            'topicId'   => 0,
+            'nodeMap'   => $nodeMap,
+            'currentId' => $tree['nodes'][0]['id'],
+            'sentence'  => '',
+        ]);
+    }
+
+    public function navigateDiscovery(): void {
+        $nodeMap = $_SESSION['discovery_nodeMap'] ?? null;
+        if (!$nodeMap) { header("Location: " . BASE_URL); exit; }
+
+        $nodeId = (int)($_GET['dnode'] ?? 0);
+        $optIdx = isset($_GET['oidx']) ? (int)$_GET['oidx'] : -1;
+        $node   = $nodeMap[$nodeId] ?? null;
+        $opts   = $node['options'] ?? [];
+
+        if (!$node || $optIdx < 0 || !isset($opts[$optIdx])) {
+            header("Location: " . BASE_URL); exit;
+        }
+
+        $chosen      = $opts[$optIdx];
+        $nextId      = $chosen['next_node_id'] ?? null;
+        $targetTopic = $chosen['target_topic'] ?? null;
+
+        if (isset($_SESSION['intent_state'])) {
+            $state = &$_SESSION['intent_state'];
+            $state['history'][] = ['node' => $nodeId, 'label' => $chosen['label']];
+            $state['current_node_id'] = $nextId;
+            $this->updateProbabilities($state, $chosen['label']);
+        }
+
+        if ($targetTopic !== null) {
+            $suggestedMessage = $chosen['suggested_message'] ?? ('Ik wil ' . strtolower($chosen['label']));
+            $_SESSION['discovery_confirm'] = [
+                'target_topic'      => $targetTopic,
+                'suggested_message' => $suggestedMessage,
+            ];
+            header("Location: " . BASE_URL . "?action=discovery_confirm");
+            exit;
+        }
+
+        $history  = $_SESSION['intent_state']['history'] ?? [];
+        $sentence = $this->buildCandidateSentence($history);
+
+        $this->render('discovery_node', [
+            'topicId'   => 0,
+            'nodeMap'   => $nodeMap,
+            'currentId' => $nextId,
+            'sentence'  => $sentence,
+        ]);
+    }
+
+    private function buildCandidateSentence(array $history): string {
+        if (empty($history)) return '';
+        $labels = array_column($history, 'label');
+        if (count($labels) === 1) return 'Ik wil iets zeggen over: ' . $labels[0];
+        $last = array_pop($labels);
+        return 'Ik wil zeggen over ' . implode(', ', $labels) . ': ' . $last;
+    }
+
+    public function showDiscoveryConfirm(): void {
+        $confirm = $_SESSION['discovery_confirm'] ?? null;
+        if (!$confirm) { header("Location: " . BASE_URL); exit; }
+        $this->render('discovery_confirm', [
+            'topicId'          => 0,
+            'suggestedMessage' => $confirm['suggested_message'],
+            'targetTopic'      => $confirm['target_topic'],
+        ]);
+    }
+
+    public function confirmDiscoveryYes(): void {
+        $confirm = $_SESSION['discovery_confirm'] ?? null;
+        if (!$confirm) { header("Location: " . BASE_URL); exit; }
+
+        $targetTopic      = $confirm['target_topic'];
+        $suggestedMessage = $confirm['suggested_message'];
+
+        // Update intent state met de uiteindelijke intentie
+        if (isset($_SESSION['intent_state'])) {
+            $_SESSION['intent_state']['topic']     = $targetTopic;
+            $_SESSION['intent_state']['completed'] = false;
+        }
+
+        // Zoek bestaand topic
+        $stmt = $this->db->prepare(
+            "SELECT id, root_node_id FROM topics WHERE LOWER(name) LIKE LOWER(?)"
+        );
+        $stmt->execute(['%' . $targetTopic . '%']);
+        $dbTopic = $stmt->fetch();
+
+        if ($dbTopic) {
+            $_SESSION['history'] = [];
+            header("Location: " . BASE_URL . "?topic={$dbTopic['id']}&node={$dbTopic['root_node_id']}");
+        } else {
+            $goal = "Communicatieboom voor: \"$suggestedMessage\"";
+            $stmt = $this->db->prepare(
+                "INSERT INTO ai_jobs (topic, goal, job_type) VALUES (?, ?, 'topic_auto')"
+            );
+            $stmt->execute([$targetTopic, $goal]);
+            $jobId = (int)$this->db->lastInsertId();
+            header("Location: " . BASE_URL . "?action=discovery_topic_waiting&job=$jobId&topic_name=" . urlencode($targetTopic));
+        }
+        exit;
+    }
+
+    public function discoveryWaiting(int $jobId): void {
+        $this->render('discovery_waiting', ['jobId' => $jobId, 'topicId' => 0]);
+    }
+
+    public function discoveryWaitingStatus(int $jobId): void {
+        header('Content-Type: application/json');
+        $stmt = $this->db->prepare("SELECT status, result_json FROM ai_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch();
+        if (!$job)                       { echo json_encode(['status' => 'error', 'error' => 'Job niet gevonden']); exit; }
+        if ($job['status'] === 'error')  { echo json_encode(['status' => 'error']); exit; }
+        if ($job['status'] !== 'done')   { echo json_encode(['status' => 'pending']); exit; }
+
+        $tree = json_decode($job['result_json'], true);
+        $this->saveDiscoveryTree($tree);
+        $this->db->prepare("DELETE FROM ai_jobs WHERE id = ?")->execute([$jobId]);
+        echo json_encode(['status' => 'done', 'redirect' => BASE_URL . "?action=start_discovery"]);
+    }
+
+    public function discoveryTopicWaiting(int $jobId, string $topicName): void {
+        $this->render('discovery_topic_waiting', ['jobId' => $jobId, 'topicName' => $topicName, 'topicId' => 0]);
+    }
+
+    public function discoveryTopicStatus(int $jobId, string $topicName): void {
+        header('Content-Type: application/json');
+        $stmt = $this->db->prepare("SELECT status, result_json FROM ai_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch();
+        if (!$job)                       { echo json_encode(['status' => 'error', 'error' => 'Niet gevonden']); exit; }
+        if ($job['status'] === 'error')  { echo json_encode(['status' => 'error', 'error' => $job['error_message'] ?? '']); exit; }
+        if ($job['status'] !== 'done')   { echo json_encode(['status' => 'pending']); exit; }
+
+        $tree    = json_decode($job['result_json'], true);
+        $topicId = $this->autoSaveTopicFromTree($topicName, $tree, $jobId);
+        $_SESSION['history'] = [];
+        echo json_encode(['status' => 'done', 'redirect' => BASE_URL . "?topic=$topicId"]);
+    }
+
+    private function autoSaveTopicFromTree(string $name, array $tree, int $jobId): int {
+        $nodes = $tree['nodes'] ?? [];
+        $this->db->beginTransaction();
+        try {
+            $stmtTopic = $this->db->prepare("INSERT INTO topics (name, root_node_id) VALUES (?, NULL)");
+            $stmtTopic->execute([htmlspecialchars($name, ENT_QUOTES, 'UTF-8')]);
+            $topicId = (int)$this->db->lastInsertId();
+
+            $idMap = [];
+            foreach ($nodes as $n) {
+                $stmtNode = $this->db->prepare("INSERT INTO nodes (topic_id) VALUES (?)");
+                $stmtNode->execute([$topicId]);
+                $idMap[$n['id']] = (int)$this->db->lastInsertId();
+            }
+
+            foreach ($nodes as $n) {
+                $realNodeId = $idMap[$n['id']];
+                foreach (['option_a', 'option_b'] as $optKey) {
+                    $opt        = $n[$optKey];
+                    $nextRealId = ($opt['next_node_id'] !== null && isset($idMap[$opt['next_node_id']]))
+                        ? $idMap[$opt['next_node_id']] : null;
+                    $this->db->prepare(
+                        "INSERT INTO options (node_id, label, image_hint, image_url, next_node_id) VALUES (?,?,?,?,?)"
+                    )->execute([
+                        $realNodeId,
+                        htmlspecialchars($opt['label'] ?? '', ENT_QUOTES, 'UTF-8'),
+                        htmlspecialchars($opt['image_hint'] ?? '', ENT_QUOTES, 'UTF-8'),
+                        htmlspecialchars($opt['image_url'] ?? '', ENT_QUOTES, 'UTF-8'),
+                        $nextRealId,
+                    ]);
+                }
+            }
+
+            if (isset($idMap[1])) {
+                $this->db->prepare("UPDATE topics SET root_node_id = ? WHERE id = ?")->execute([$idMap[1], $topicId]);
+            }
+            $this->db->prepare("DELETE FROM ai_jobs WHERE id = ?")->execute([$jobId]);
+            $this->db->commit();
+        } catch (\Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+        return $topicId;
+    }
+
+    private function queueDiscovery(): void {
+        // Hergebruik bestaande pending job als die er al is
+        $existing = $this->db->query(
+            "SELECT id FROM ai_jobs WHERE job_type='discovery' AND status='pending' LIMIT 1"
+        )->fetch();
+
+        if ($existing) {
+            $jobId = (int)$existing['id'];
+        } else {
+            $this->db->prepare(
+                "INSERT INTO ai_jobs (topic, goal, job_type) VALUES ('Ontdekking', 'Genereer ontdekkers-boom', 'discovery')"
+            )->execute();
+            $jobId = (int)$this->db->lastInsertId();
+        }
+
+        $this->render('discovery_waiting', ['jobId' => $jobId, 'topicId' => 0]);
+    }
+
+    private function loadDiscoveryTree(): ?array {
+        $path = __DIR__ . '/../../storage/discovery_tree.json';
+        if (!file_exists($path)) return null;
+        $data = json_decode(file_get_contents($path), true);
+        return ($data && isset($data['nodes'])) ? $data : null;
+    }
+
+    private function saveDiscoveryTree(array $tree): void {
+        file_put_contents(__DIR__ . '/../../storage/discovery_tree.json', json_encode($tree));
+    }
+
+    // ─── Back / Reset ─────────────────────────────────────────────────────────
 
     public function back(int $topicId): void {
         if (isset($_SESSION['history']) && count($_SESSION['history']) > 1) {
