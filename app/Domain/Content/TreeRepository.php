@@ -11,7 +11,7 @@ class TreeRepository
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            "SELECT id, tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order
+            "SELECT id, tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order, next_node_id
              FROM tree_nodes
              WHERE tree_id = ? AND parent_id IS ?
              ORDER BY sort_order ASC"
@@ -24,7 +24,7 @@ class TreeRepository
     {
         $db   = Database::getConnection();
         $stmt = $db->prepare(
-            "SELECT id, tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message
+            "SELECT id, tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, next_node_id
              FROM tree_nodes WHERE id = ?"
         );
         $stmt->execute([$nodeId]);

@@ -74,6 +74,8 @@ class Database {
         )");
         try { $db->exec("ALTER TABLE option_trees ADD COLUMN generation_mode TEXT NOT NULL DEFAULT 'static'"); } catch (\Exception $e) {}
 
+        try { $db->exec("ALTER TABLE tree_nodes ADD COLUMN next_node_id INTEGER NULL REFERENCES tree_nodes(id)"); } catch (\Exception $e) {}
+
         $db->exec("CREATE TABLE IF NOT EXISTS tree_nodes (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,
             tree_id          INTEGER NOT NULL REFERENCES option_trees(id),

@@ -100,6 +100,13 @@
     display: flex; align-items: center; gap: 8px;
     margin-top: 8px; font-size: .85rem; color: #555;
 }
+.opt-next-select {
+    width:100%; box-sizing:border-box;
+    padding:6px 10px; font-size:.85rem;
+    border:1px solid #ddd; border-radius:7px;
+    outline:none; background:white; margin-top:8px; color:#333;
+}
+.opt-next-select:focus { border-color: var(--color-accent); }
 .opt-suggested {
     width:100%; box-sizing:border-box;
     padding:6px 10px; font-size:.85rem;
@@ -221,28 +228,48 @@ $treeId = (int)$tree['id'];
             <button type="button" class="img-pick-btn" onclick="openPicker('<?= $inputId ?>')">🖼</button>
         </div>
 
-        <?php $hasChildren = isset($groups[$nodeId]); ?>
-        <?php if ($hasChildren): ?>
-            <div class="opt-leaf-row" style="color:var(--color-accent); font-weight:600;">
-                → Heeft vervolgopties
-            </div>
-            <input type="hidden" name="nodes[<?= $nodeId ?>][is_leaf]" value="0">
-        <?php else: ?>
-            <div class="opt-leaf-row">
-                <input type="checkbox" id="leaf_<?= $nodeId ?>"
-                       name="nodes[<?= $nodeId ?>][is_leaf]" value="1"
-                       <?= $isLeaf ? 'checked' : '' ?>
-                       onchange="toggleSuggested(<?= $nodeId ?>, this.checked)">
-                <label for="leaf_<?= $nodeId ?>">★ Eindpunt (geen volgende node)</label>
-            </div>
-            <input type="text"
-                   id="suggested_<?= $nodeId ?>"
-                   name="nodes[<?= $nodeId ?>][suggested_message]"
-                   class="opt-suggested"
-                   value="<?= htmlspecialchars($node['suggested_message'] ?? '') ?>"
-                   placeholder="Volledige bevestigingszin..."
-                   style="<?= $isLeaf ? '' : 'display:none;' ?>">
-        <?php endif; ?>
+        <?php
+            // Determine pre-selected value for next-node combo
+            if ($isLeaf) {
+                $nextVal = '';
+            } elseif (!empty($node['next_node_id'])) {
+                $nextVal = (string)(int)$node['next_node_id'];
+            } elseif (isset($groups[$nodeId])) {
+                $nextVal = (string)$nodeId;
+            } else {
+                $nextVal = '';
+            }
+        ?>
+        <select name="nodes[<?= $nodeId ?>][next_node_id]"
+                class="opt-next-select"
+                onchange="toggleSuggested(<?= $nodeId ?>, this.value === '')">
+            <option value=""<?= $nextVal === '' ? ' selected' : '' ?>>★ Eindpunt (geen volgende stap)</option>
+            <?php foreach ($groups as $gKey => $gGroup): ?>
+                <?php if ($gKey === 'root' || $gKey == $nodeId) continue; ?>
+                <?php
+                    $gParent = $gGroup['parent'];
+                    $gLabel  = $gParent ? htmlspecialchars($gParent['label']) : 'Start';
+                    $gCount  = count($gGroup['children']);
+                    $gVal    = (string)$gKey;
+                    $sel     = ($nextVal === $gVal) ? ' selected' : '';
+                ?>
+                <option value="<?= $gVal ?>"<?= $sel ?>>→ <?= $gLabel ?> (<?= $gCount ?> opties)</option>
+            <?php endforeach; ?>
+            <?php if (isset($groups[$nodeId])): ?>
+                <?php
+                    $ownCount = count($groups[$nodeId]['children']);
+                    $ownSel   = ($nextVal === (string)$nodeId) ? ' selected' : '';
+                ?>
+                <option value="<?= $nodeId ?>"<?= $ownSel ?>>→ Eigen vervolgopties (<?= $ownCount ?>)</option>
+            <?php endif; ?>
+        </select>
+        <input type="text"
+               id="suggested_<?= $nodeId ?>"
+               name="nodes[<?= $nodeId ?>][suggested_message]"
+               class="opt-suggested"
+               value="<?= htmlspecialchars($node['suggested_message'] ?? '') ?>"
+               placeholder="Volledige bevestigingszin..."
+               style="<?= $nextVal === '' ? '' : 'display:none;' ?>">
     </div>
     <?php endforeach; ?>
 </div>

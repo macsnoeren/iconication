@@ -604,15 +604,25 @@ class AdminController {
     {
         $repo = new \App\Domain\Content\TreeRepository();
         foreach ($_POST['nodes'] ?? [] as $nodeId => $data) {
-            $nodeId    = (int)$nodeId;
-            $label     = mb_substr(trim($data['label'] ?? ''), 0, 100);
-            $imageUrl  = mb_substr(trim($data['image_url'] ?? ''), 0, 500);
-            $isLeaf    = isset($data['is_leaf']) ? 1 : 0;
-            $suggested = mb_substr(trim($data['suggested_message'] ?? ''), 0, 500);
+            $nodeId      = (int)$nodeId;
+            $label       = mb_substr(trim($data['label'] ?? ''), 0, 100);
+            $imageUrl    = mb_substr(trim($data['image_url'] ?? ''), 0, 500);
+            $suggested   = mb_substr(trim($data['suggested_message'] ?? ''), 0, 500);
+            $nextRaw     = trim($data['next_node_id'] ?? '');
             if ($label === '') continue;
+
+            if ($nextRaw === '') {
+                $isLeaf     = 1;
+                $nextNodeId = null;
+            } else {
+                $isLeaf     = 0;
+                $nextInt    = (int)$nextRaw;
+                $nextNodeId = ($nextInt === $nodeId) ? null : $nextInt;
+            }
+
             $this->db->prepare(
-                "UPDATE tree_nodes SET label=?, image_url=?, is_leaf=?, suggested_message=? WHERE id=? AND tree_id=?"
-            )->execute([$label, $imageUrl ?: null, $isLeaf, $suggested ?: null, $nodeId, $treeId]);
+                "UPDATE tree_nodes SET label=?, image_url=?, is_leaf=?, suggested_message=?, next_node_id=? WHERE id=? AND tree_id=?"
+            )->execute([$label, $imageUrl ?: null, $isLeaf, ($isLeaf ? $suggested : null) ?: null, $nextNodeId, $nodeId, $treeId]);
             if ($imageUrl) {
                 $repo->syncImageForLabel($label, $imageUrl);
             }

@@ -46,7 +46,8 @@ class SessionManager
             );
         }
 
-        $options = $this->intent->getNextOptions($session, $nodeId);
+        $navId   = !empty($node['next_node_id']) ? (int)$node['next_node_id'] : $nodeId;
+        $options = $this->intent->getNextOptions($session, $navId);
         return new SelectResult(
             options:          $options,
             sentence:         $this->buildSentence($sessionId),
