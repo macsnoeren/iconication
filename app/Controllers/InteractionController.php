@@ -213,27 +213,12 @@ class InteractionController
         exit;
     }
 
-    // ── Restore sessie of toon home ───────────────────────────────────────────
+    // ── Home: altijd het keuzescherm, sessie wissen ───────────────────────────
     public function restore(): void
     {
-        $sessionId = $_SESSION['session_id'] ?? null;
-        if ($sessionId) {
-            $result = $this->sessions->restore($sessionId);
-            if ($result) {
-                if ($result->options->isPending) {
-                    $this->render('session_waiting', [
-                        'jobId'    => $result->options->jobId,
-                        'sentence' => $result->sentence,
-                        'view'     => 'session_waiting',
-                    ]);
-                    return;
-                }
-                $this->renderSession($sessionId, $result->options->options, $result->sentence);
-                return;
-            }
-        }
+        // Navigeren naar home wist altijd de actieve sessie
+        unset($_SESSION['session_id']);
 
-        // Geen actieve sessie — toon altijd het keuzescherm
         $trees       = (new \App\Domain\Content\TreeRepository())->getAllReady();
         $dynamicTree = null;
         $staticTrees = [];
