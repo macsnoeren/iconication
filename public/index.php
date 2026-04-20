@@ -81,6 +81,9 @@ if (str_starts_with($action ?? '', 'admin') || $action === 'admin_regenerate_dis
         'admin_ai_job_status'   => isset($_GET['job']) ? $admin->aiJobStatus((int)$_GET['job'])  : $admin->index(),
         'admin_ai_preview'      => isset($_GET['job']) ? $admin->aiPreviewJob((int)$_GET['job']) : $admin->index(),
         'admin_ai_save'         => $admin->aiSaveTopic(),
+        'admin_enable_dynamic'  => $admin->enableDynamicMode(),
+        'admin_enable_static'   => $admin->enableStaticMode(),
+        'admin_set_tree_mode'   => isset($_GET['tree']) ? $admin->setTreeMode((int)$_GET['tree'], $_GET['mode'] ?? 'static') : $admin->index(),
         'admin_regenerate_discovery' => (function() use ($db) {
             header('Content-Type: application/json');
             $stmt = $db->prepare("INSERT INTO ai_jobs (topic, goal, job_type) VALUES ('Ontdekking', 'Genereer', 'discovery')");

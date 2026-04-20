@@ -18,8 +18,59 @@ class AdminController {
 
     public function index(): void {
         $topics = $this->db->query("SELECT * FROM topics")->fetchAll();
-        $view = 'admin_dashboard';
+        $trees  = $this->db->query("SELECT * FROM option_trees ORDER BY created_at DESC")->fetchAll();
+        $view   = 'admin_dashboard';
         include __DIR__ . "/../../views/layout.php";
+    }
+
+    // Maak een dynamische AI-boom aan (of activeer bestaande) en stel hem in als actief.
+    public function enableDynamicMode(): void {
+        // Zet alle bestaande bomen op 'static'
+        $this->db->exec("UPDATE option_trees SET generation_mode = 'static'");
+
+        // Controleer of er al een dynamic boom bestaat
+        $existing = $this->db->query(
+            "SELECT id FROM option_trees WHERE name = 'AI Gesprek' LIMIT 1"
+        )->fetch();
+
+        if ($existing) {
+            $this->db->prepare(
+                "UPDATE option_trees SET generation_mode = 'dynamic', status = 'ready' WHERE id = ?"
+            )->execute([$existing['id']]);
+        } else {
+            // Zorg dat er een profiel is
+            $profileCount = $this->db->query("SELECT COUNT(*) FROM user_profiles")->fetchColumn();
+            if ($profileCount == 0) {
+                $this->db->exec("INSERT INTO user_profiles (id, name, language, support_level) VALUES (1, 'Standaard gebruiker', 'nl', 2)");
+            }
+            $this->db->prepare(
+                "INSERT INTO option_trees (profile_id, name, language, status, generation_mode) VALUES (1, 'AI Gesprek', 'nl', 'ready', 'dynamic')"
+            )->execute();
+        }
+
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
+    }
+
+    // Zet alles terug op static (gebruik vooraf gegenereerde bomen).
+    public function enableStaticMode(): void {
+        $this->db->exec("UPDATE option_trees SET generation_mode = 'static'");
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
+    }
+
+    // Verander de generation_mode van één specifieke boom.
+    public function setTreeMode(int $treeId, string $mode): void {
+        $mode = $mode === 'dynamic' ? 'dynamic' : 'static';
+        if ($mode === 'dynamic') {
+            // Zet andere bomen op static zodat er altijd maar één dynamic actief is
+            $this->db->exec("UPDATE option_trees SET generation_mode = 'static'");
+        }
+        $this->db->prepare(
+            "UPDATE option_trees SET generation_mode = ? WHERE id = ?"
+        )->execute([$mode, $treeId]);
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
     }
 
     public function deleteTopic(int $id): void {
