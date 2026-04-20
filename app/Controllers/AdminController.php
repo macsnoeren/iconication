@@ -572,16 +572,28 @@ class AdminController {
         $tree = $stmt->fetch();
         if (!$tree) { header("Location: " . BASE_URL . "?action=admin"); exit; }
 
-        // Haal nodes op met parent-label voor context
         $stmt = $this->db->prepare(
-            "SELECT n.*, p.label AS parent_label
-             FROM tree_nodes n
-             LEFT JOIN tree_nodes p ON p.id = n.parent_id
-             WHERE n.tree_id = ?
-             ORDER BY n.depth ASC, n.sort_order ASC"
+            "SELECT * FROM tree_nodes WHERE tree_id = ? ORDER BY depth ASC, sort_order ASC"
         );
         $stmt->execute([$treeId]);
-        $nodes = $stmt->fetchAll();
+        $allNodes = $stmt->fetchAll();
+
+        // Opzoektabel op ID
+        $byId = [];
+        foreach ($allNodes as $n) $byId[$n['id']] = $n;
+
+        // Groepeer per beslispunt (parent): elk beslispunt wordt één kaart
+        $groups = [];
+        foreach ($allNodes as $n) {
+            $key = $n['parent_id'] ?? 'root';
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'parent'   => $n['parent_id'] ? ($byId[$n['parent_id']] ?? null) : null,
+                    'children' => [],
+                ];
+            }
+            $groups[$key]['children'][] = $n;
+        }
 
         $view = 'admin_tree_nodes';
         include __DIR__ . "/../../views/layout.php";

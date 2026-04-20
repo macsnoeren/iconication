@@ -10,64 +10,191 @@
     <a href="<?= BASE_URL ?>?action=admin" class="btn">← Terug</a>
 </div>
 
-<?php if (empty($nodes)): ?>
+<?php if (empty($groups)): ?>
     <div class="card-admin">
-        <p style="color:var(--color-text-muted);">Nog geen opties gegenereerd. Start een gesprek om de AI-opties te laten genereren.</p>
+        <p style="color:var(--color-text-muted);">
+            Nog geen opties. Klik <strong>+ Optie toevoegen</strong> om te beginnen,
+            of start een AI-gesprek om opties te laten genereren.
+        </p>
     </div>
 <?php else: ?>
-    <table class="table">
-        <thead>
-            <tr>
-                <th style="width:40px;">Diepte</th>
-                <th>Label</th>
-                <th>Afbeelding</th>
-                <th>Ouder</th>
-                <th style="width:60px;">Blad</th>
-                <th style="width:160px; text-align:center;">Acties</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($nodes as $node): ?>
-                <tr>
-                    <td style="color:var(--color-text-muted); text-align:center;">
-                        <?= str_repeat('↳ ', $node['depth']) ?><?= $node['depth'] ?>
-                    </td>
-                    <td>
-                        <strong><?= htmlspecialchars($node['label']) ?></strong>
-                        <?php if ($node['suggested_message']): ?>
-                            <div style="font-size:.8rem; color:var(--color-text-muted); margin-top:2px;">
-                                "<?= htmlspecialchars($node['suggested_message']) ?>"
-                            </div>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($node['image_url']): ?>
-                            <img src="<?= htmlspecialchars($node['image_url']) ?>"
-                                 alt="<?= htmlspecialchars($node['label']) ?>"
-                                 style="height:48px; width:48px; object-fit:contain; border-radius:6px; border:1px solid var(--color-border);">
-                        <?php else: ?>
-                            <span style="color:var(--color-text-muted); font-size:.85rem;">geen</span>
-                        <?php endif; ?>
-                    </td>
-                    <td style="color:var(--color-text-muted); font-size:.9rem;">
-                        <?= $node['parent_label'] ? htmlspecialchars($node['parent_label']) : '—' ?>
-                    </td>
-                    <td style="text-align:center;">
-                        <?= $node['is_leaf'] ? '✅' : '' ?>
-                    </td>
-                    <td style="text-align:center;">
-                        <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
-                            <a href="<?= BASE_URL ?>?action=admin_add_tree_node&tree=<?= (int)$tree['id'] ?>&parent=<?= $node['id'] ?>"
-                               class="btn btn--success" style="padding:5px 10px; font-size:.8rem;">+ Kind</a>
-                            <a href="<?= BASE_URL ?>?action=admin_edit_tree_node&node=<?= $node['id'] ?>"
-                               class="btn btn--accent" style="padding:5px 12px; font-size:.8rem;">Bewerken</a>
-                            <a href="<?= BASE_URL ?>?action=admin_delete_tree_node&node=<?= $node['id'] ?>"
-                               class="btn btn--danger" style="padding:5px 12px; font-size:.8rem;"
-                               onclick="return confirm('Verwijder deze optie en alle kinderen?')">✕</a>
-                        </div>
-                    </td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
+
+<style>
+.tree-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 18px;
+    margin-bottom: 24px;
+}
+.tree-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+}
+.tree-card__head {
+    background: var(--color-primary);
+    color: #fff;
+    padding: 10px 16px;
+    font-size: .85rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.tree-card__head .depth-badge {
+    background: rgba(255,255,255,.18);
+    border-radius: 20px;
+    padding: 1px 8px;
+    font-size: .75rem;
+    font-weight: 400;
+}
+.tree-card__head .add-root {
+    margin-left: auto;
+    background: var(--color-success);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: .8rem;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+.tree-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--color-border);
+}
+.tree-option:last-child { border-bottom: none; }
+.tree-option__img {
+    width: 44px; height: 44px;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    flex-shrink: 0;
+    background: #f8fafc;
+}
+.tree-option__img-empty {
+    width: 44px; height: 44px;
+    border-radius: 8px;
+    border: 1px dashed var(--color-border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    font-size: 1.2rem;
+    background: #f8fafc;
+}
+.tree-option__label {
+    flex: 1;
+    font-weight: 600;
+    font-size: .95rem;
+    color: var(--color-text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tree-option__label .leaf-badge {
+    display: inline-block;
+    background: var(--color-success);
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: .72rem;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.tree-option__label .andere-badge {
+    display: inline-block;
+    background: var(--color-text-muted);
+    color: #fff;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: .72rem;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.tree-option__actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.tree-option__actions a {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: .78rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+}
+.tree-option__actions .act-add  { background: var(--color-success); }
+.tree-option__actions .act-edit { background: var(--color-accent); }
+.tree-option__actions .act-del  { background: var(--color-danger); }
+</style>
+
+<div class="tree-grid">
+<?php foreach ($groups as $key => $group):
+    $parent   = $group['parent'];
+    $children = $group['children'];
+    $isRoot   = ($key === 'root');
+    $headLabel = $isRoot ? 'Start' : htmlspecialchars($parent['label'] ?? '—');
+    $depth     = $isRoot ? 0 : (int)($parent['depth'] ?? 0);
+?>
+<div class="tree-card">
+    <div class="tree-card__head">
+        <?= $isRoot ? '🏠 ' : str_repeat('↳ ', $depth) ?>
+        <?= $headLabel ?>
+        <span class="depth-badge">diepte <?= $isRoot ? 0 : $depth + 1 ?></span>
+        <a href="<?= BASE_URL ?>?action=admin_add_tree_node&tree=<?= (int)$tree['id'] ?><?= !$isRoot ? '&parent='.(int)$parent['id'] : '' ?>"
+           class="add-root">+ Optie</a>
+    </div>
+
+    <?php foreach ($children as $node):
+        $isAndere = ($node['label'] === 'Iets anders');
+    ?>
+    <div class="tree-option">
+        <?php if (!empty($node['image_url'])): ?>
+            <img class="tree-option__img"
+                 src="<?= htmlspecialchars($node['image_url']) ?>"
+                 alt="<?= htmlspecialchars($node['label']) ?>"
+                 onerror="this.style.opacity='.2'">
+        <?php else: ?>
+            <div class="tree-option__img-empty"><?= $isAndere ? '↩' : '💬' ?></div>
+        <?php endif; ?>
+
+        <span class="tree-option__label">
+            <?= htmlspecialchars($node['label']) ?>
+            <?php if ($node['is_leaf']): ?>
+                <span class="leaf-badge">✓ klaar</span>
+            <?php elseif ($isAndere): ?>
+                <span class="andere-badge">anders</span>
+            <?php endif; ?>
+        </span>
+
+        <div class="tree-option__actions">
+            <a class="act-add"
+               href="<?= BASE_URL ?>?action=admin_add_tree_node&tree=<?= (int)$tree['id'] ?>&parent=<?= (int)$node['id'] ?>"
+               title="Kind toevoegen">+</a>
+            <a class="act-edit"
+               href="<?= BASE_URL ?>?action=admin_edit_tree_node&node=<?= (int)$node['id'] ?>">✎</a>
+            <a class="act-del"
+               href="<?= BASE_URL ?>?action=admin_delete_tree_node&node=<?= (int)$node['id'] ?>"
+               onclick="return confirm('Verwijder \'<?= htmlspecialchars(addslashes($node['label'])) ?>\' en alle kinderen?')">✕</a>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+<?php endforeach; ?>
+</div>
+
 <?php endif; ?>
