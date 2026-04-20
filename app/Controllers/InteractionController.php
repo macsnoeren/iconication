@@ -195,6 +195,24 @@ class InteractionController
         $this->renderSession($sessionId, $options, $sentence);
     }
 
+    // ── Reset dynamische boom (verwijdert alle gegenereerde nodes) ───────────
+    public function resetDynamic(): void
+    {
+        unset($_SESSION['session_id']);
+
+        $db = \App\Core\Database::getConnection();
+        $stmt = $db->query(
+            "SELECT id FROM option_trees WHERE generation_mode = 'dynamic' AND status = 'ready' LIMIT 1"
+        );
+        $tree = $stmt->fetch();
+        if ($tree) {
+            $db->prepare("DELETE FROM tree_nodes WHERE tree_id = ?")->execute([$tree['id']]);
+        }
+
+        header("Location: " . BASE_URL);
+        exit;
+    }
+
     // ── Restore sessie of toon home ───────────────────────────────────────────
     public function restore(): void
     {
