@@ -1,5 +1,11 @@
 <?php $count = count($options); ?>
 
+<?php
+$regularOptions = array_filter($options, fn($n) => empty($n['is_andere']));
+$andereOption   = array_filter($options, fn($n) => !empty($n['is_andere']));
+$count = count($regularOptions);
+?>
+
 <div style="display:flex; flex-direction:column; flex:1; min-height:0; gap:10px;">
 
     <?php if ($sentence): ?>
@@ -7,11 +13,11 @@
     <?php endif; ?>
 
     <form method="POST" action="<?= BASE_URL ?>?action=session_select" id="sel-form"
-          style="flex:1; min-height:0; display:flex; flex-direction:column;">
+          style="flex:1; min-height:0; display:flex; flex-direction:column; gap:10px;">
         <input type="hidden" name="node_id" id="node-input" value="">
 
         <div class="card-grid<?= $count >= 3 ? ' card-grid--4' : '' ?>" style="flex:1; min-height:0;">
-            <?php foreach ($options as $node): ?>
+            <?php foreach ($regularOptions as $node): ?>
                 <button type="button"
                         class="card<?= $node['is_leaf'] ? ' card--leaf' : '' ?>"
                         onclick="document.getElementById('node-input').value='<?= (int)$node['id'] ?>';
@@ -30,6 +36,16 @@
                 </button>
             <?php endforeach; ?>
         </div>
+
+        <?php if ($andereOption): ?>
+            <div style="text-align:center; padding-top:4px;">
+                <button type="submit" name="is_andere" value="1"
+                        class="btn"
+                        style="font-size:.95rem; padding:10px 28px;">
+                    Iets anders
+                </button>
+            </div>
+        <?php endif; ?>
     </form>
 
 </div>

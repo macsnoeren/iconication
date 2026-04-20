@@ -65,8 +65,27 @@ class InteractionController
     {
         $sessionId = $_SESSION['session_id'] ?? null;
         $nodeId    = (int)($_POST['node_id'] ?? 0);
+        $isAndere  = isset($_POST['is_andere']);
 
-        if (!$sessionId || !$nodeId) { $this->redirectHome(); return; }
+        if (!$sessionId) { $this->redirectHome(); return; }
+
+        // "Iets anders" — opnieuw genereren met andere opties
+        if ($isAndere) {
+            try {
+                $jobId = $this->sessions->queueAndereOptions($sessionId);
+                $this->render('session_waiting', [
+                    'jobId'    => $jobId,
+                    'sentence' => $_SESSION['pending_sentence'] ?? '',
+                    'view'     => 'session_waiting',
+                ]);
+            } catch (\Throwable $e) {
+                error_log('InteractionController::select(andere) error: ' . $e->getMessage());
+                $this->render('error', ['message' => $e->getMessage(), 'view' => 'error']);
+            }
+            return;
+        }
+
+        if (!$nodeId) { $this->redirectHome(); return; }
 
         try {
             $result = $this->sessions->select($sessionId, $nodeId);
@@ -178,9 +197,10 @@ class InteractionController
 
         // Job klaar: verwerk resultaat, sla nodes op, zet sessie-vars VOOR output
         try {
-            $data       = json_decode($job['result_json'], true);
-            $isComplete = (bool)($data['is_complete'] ?? false);
-            $rawOptions = $data['options'] ?? [];
+            $data           = json_decode($job['result_json'], true);
+            $isComplete     = (bool)($data['is_complete'] ?? false);
+            $rawOptions     = $data['options'] ?? [];
+            $sentenceSoFar  = trim($data['sentence_so_far'] ?? '');
 
             $aiOptions = array_map(fn($opt) => [
                 'label'             => $opt['label'] ?? '',
@@ -191,8 +211,21 @@ class InteractionController
 
             $result = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
 
-            $_SESSION['pending_options']  = $result->options->options;
-            $_SESSION['pending_sentence'] = $result->sentence;
+            // Voeg "Iets anders" toe als permanente extra optie (niet door AI gegenereerd)
+            $options = $result->options->options;
+            $options[] = [
+                'id'                => 0,
+                'label'             => 'Iets anders',
+                'image_url'         => null,
+                'is_leaf'           => 0,
+                'suggested_message' => null,
+                'is_andere'         => true,
+            ];
+
+            $sentence = $sentenceSoFar ?: $result->sentence;
+
+            $_SESSION['pending_options']  = $options;
+            $_SESSION['pending_sentence'] = $sentence;
 
             echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_show']);
         } catch (\Throwable $e) {

@@ -429,59 +429,67 @@ def run_tune(cfg: configparser.ConfigParser, php_url: str, api_key: str) -> None
 
 # ─── Dynamische opties generatie ─────────────────────────────────────────────
 
-DYNAMIC_OPTIONS_PROMPT = """Je bent een AAC specialist die real-time communicatie-opties genereert.
+DYNAMIC_OPTIONS_PROMPT = """Je bent een AAC-communicatiespecialist. Een niet-verbale gebruiker probeert iets te zeggen.
 
-De gebruiker heeft eerder deze keuzes gemaakt (in volgorde):
+Selectiegeschiedenis (wat de gebruiker tot nu toe koos):
 {history_text}
 
-Genereer nu de meest informatieve vervolgopties.
-Bepaal zelf het aantal (2, 3 of 4) — kies wat het beste past bij de context.
+Al eerder getoonde opties (NIET herhalen, tenzij echt onvermijdelijk):
+{shown_text}
 
-Als de intentie duidelijk genoeg is (je weet wat de gebruiker wil):
-- Zet "is_complete": true
-- Geef 2-4 concrete eindopties, elk met "target_topic" en "suggested_message"
+Jouw taak:
+1. Bedenk wat de gebruiker PRECIES wil zeggen op basis van de selecties.
+2. Geef 2-4 NIEUWE, SPECIFIEKE vervolgopties die de intentie verder verfijnen.
+3. Vermijd vage of generieke opties zoals "Iets anders doen" of "Meer opties".
+4. Als de intentie al duidelijk genoeg is: geef concrete eindopties met een volledige zin.
+5. Geef altijd ook een `sentence_so_far`: de best mogelijke zin die de gebruiker nu al zou kunnen zeggen, ook als nog niet compleet.
 
-Als je meer informatie nodig hebt:
-- Zet "is_complete": false
-- Geef opties die de intentieruimte maximaal verkleinen
+Regels voor opties:
+- Labels: max 4 woorden, concreet en specifiek (bv. "Bioscoop bezoeken", niet "Uit gaan")
+- image_hint: 1-2 woorden voor een ARASAAC pictogram
+- Als `is_complete` true: geef `suggested_message` met volledige, natuurlijke zin
 
-Regels:
-- 2 tot 4 opties (jij bepaalt hoeveel)
-- Labels: max 5 woorden, concreet en visueel voorstelbaar
-- image_hint: 1-2 Nederlandse woorden voor ARASAAC pictogram
-- Geen abstracte begrippen
-
-Voorbeeld niet-compleet (meer info nodig):
+Voorbeeld (intentie nog onduidelijk):
 {{
   "is_complete": false,
+  "sentence_so_far": "Ik wil iets gaan doen",
   "options": [
-    {{"label": "Buiten gaan", "image_hint": "buiten natuur"}},
-    {{"label": "Naar winkel", "image_hint": "winkel"}},
-    {{"label": "Naar park", "image_hint": "park"}},
-    {{"label": "Thuis blijven", "image_hint": "huis"}}
+    {{"label": "Naar de bioscoop", "image_hint": "bioscoop film"}},
+    {{"label": "Naar het park", "image_hint": "park buiten"}},
+    {{"label": "Naar een restaurant", "image_hint": "restaurant eten"}},
+    {{"label": "Iets thuis doen", "image_hint": "huis thuis"}}
   ]
 }}
 
-Voorbeeld compleet (intentie duidelijk):
+Voorbeeld (intentie duidelijk — bioscoop):
 {{
   "is_complete": true,
+  "sentence_so_far": "Ik wil graag naar de bioscoop gaan",
   "options": [
-    {{"label": "Wandelen in park", "image_hint": "wandelen park", "target_topic": "Wandelen", "suggested_message": "Ik wil graag buiten wandelen in het park"}},
-    {{"label": "Fietsen buiten", "image_hint": "fietsen", "target_topic": "Fietsen", "suggested_message": "Ik wil graag buiten fietsen"}},
-    {{"label": "Andere activiteit", "image_hint": "activiteit", "target_topic": "Activiteit buiten", "suggested_message": "Ik wil graag iets buiten doen"}}
+    {{"label": "Vanavond", "image_hint": "avond", "suggested_message": "Ik wil graag vanavond naar de bioscoop gaan"}},
+    {{"label": "Dit weekend", "image_hint": "weekend", "suggested_message": "Ik wil graag dit weekend naar de bioscoop gaan"}},
+    {{"label": "Met iemand mee", "image_hint": "samen vriend", "suggested_message": "Ik wil graag samen naar de bioscoop gaan"}}
   ]
 }}
 
 Geef ALLEEN valide JSON terug, geen extra tekst."""
 
 
-def generate_dynamic_options(cfg: configparser.ConfigParser, history: list) -> dict:
+def generate_dynamic_options(cfg: configparser.ConfigParser, history: list,
+                             shown_options: list = None, rejected: bool = False) -> dict:
     if history:
         history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(history))
     else:
-        history_text = "  (geen keuzes gemaakt — dit is het begin van het gesprek)"
+        history_text = "  (dit is het begin van het gesprek)"
 
-    prompt     = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text)
+    shown = shown_options or []
+    if shown:
+        shown_text = "\n".join(f"  - {label}" for label in shown)
+    else:
+        shown_text = "  (nog geen opties getoond)"
+
+    extra = "\nDe gebruiker koos 'Iets anders' — de getoonde opties waren NIET wat hij/zij wil. Geef nu VOLLEDIG ANDERE, creatievere opties die hetzelfde doel kunnen bereiken.\n" if rejected else ""
+    prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text) + extra
     ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
     model      = active_model(cfg)
 
@@ -496,18 +504,17 @@ def _parse_dynamic_options(content: str) -> dict:
     match = re.search(r'\{[\s\S]*\}', content)
     if not match:
         raise ValueError("Geen valide JSON in dynamic-options respons")
-    data = json.loads(match.group())
+    data        = json.loads(match.group())
     options     = data.get("options", [])[:4]
     is_complete = bool(data.get("is_complete", False))
+    sentence    = data.get("sentence_so_far", "")
     if not options:
         raise ValueError("Geen opties in respons")
     if is_complete:
         for opt in options:
             if not opt.get("suggested_message"):
-                opt["suggested_message"] = "Ik wil " + opt.get("label", "iets").lower()
-            if not opt.get("target_topic"):
-                opt["target_topic"] = opt.get("label", "Onderwerp")
-    return {"is_complete": is_complete, "options": options}
+                opt["suggested_message"] = sentence or ("Ik wil " + opt.get("label", "iets").lower())
+    return {"is_complete": is_complete, "sentence_so_far": sentence, "options": options}
 
 
 # ─── Job verwerking ──────────────────────────────────────────────────────────
@@ -524,15 +531,18 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
     print(f"  → Job #{job_id}: '{topic}' [{job_type}]")
     try:
         if job_type == "dynamic_options":
-            # Lees history uit params_json (nieuwe stijl) of state_json (oud, backward-compat)
             if params_json.strip() and params_json.strip() != "null":
-                params  = json.loads(params_json)
-                history = params.get("history", [])
-                language = params.get("language", language)
+                params        = json.loads(params_json)
+                history       = params.get("history", [])
+                shown_options = params.get("shown_options", [])
+                language      = params.get("language", language)
+                rejected      = params.get("rejected", False)
             else:
-                raw_state = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
-                history   = raw_state.get("history", [])
-            result    = generate_dynamic_options(cfg, history)
+                raw_state     = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
+                history       = raw_state.get("history", [])
+                shown_options = []
+                rejected      = False
+            result    = generate_dynamic_options(cfg, history, shown_options, rejected=rejected)
             for opt in result["options"]:
                 if not opt.get("image_url"):
                     opt["image_url"] = find_icon(opt.get("image_hint", ""), language)

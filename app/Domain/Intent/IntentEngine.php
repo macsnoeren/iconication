@@ -86,7 +86,7 @@ class IntentEngine
     {
         $db = Database::getConnection();
 
-        // Haal selectie-geschiedenis op voor context
+        // Selectiegeschiedenis
         $stmt = $db->prepare(
             "SELECT label FROM session_events
              WHERE session_id = ? AND event_type = 'SELECT' ORDER BY ts ASC"
@@ -94,11 +94,17 @@ class IntentEngine
         $stmt->execute([$session->id]);
         $history = array_column($stmt->fetchAll(), 'label');
 
+        // Alle labels die al getoond zijn in deze boom (herhaling voorkomen)
+        $stmt2 = $db->prepare("SELECT label FROM tree_nodes WHERE tree_id = ?");
+        $stmt2->execute([$session->treeId]);
+        $shownOptions = array_column($stmt2->fetchAll(), 'label');
+
         $params = json_encode([
             'session_id'     => $session->id,
             'tree_id'        => $session->treeId,
             'parent_node_id' => $parentNodeId,
             'history'        => $history,
+            'shown_options'  => $shownOptions,
             'profile_id'     => $session->profileId,
             'language'       => 'nl',
         ]);
