@@ -1,1 +1,4 @@
 - Ook meenemen dat iemand een verhaal over de persoon kan vertellen hoe die is wat zijn interesses zijn ed. Om de icon generator nog beter te laten worden.
+- JA / NEE op basis van vragen.
+- Of gesprek starten met een doelstelling begin punt, bijvoorbeed "Ze wil een broodje, maar weet niet wat voor broodje".
+- Vervolg op Ja / Nee op basis van iconen.
