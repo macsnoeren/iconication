@@ -8,7 +8,8 @@
 </head>
 <?php
 $fullscreen = in_array($view ?? '', ['session', 'session_waiting', 'home']);
-$noBack     = in_array($view ?? '', ['session', 'session_waiting', 'session_complete', 'home']);
+$noBack     = in_array($view ?? '', ['session', 'session_waiting', 'session_complete', 'home'])
+           || str_starts_with($view ?? '', 'admin_');
 ?>
 <body<?= $fullscreen ? ' class="fullscreen"' : '' ?>>
 
