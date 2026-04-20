@@ -14,10 +14,10 @@ class SessionManager
         private IntentEngine   $intent,
     ) {}
 
-    public function start(int $profileId): Session
+    public function start(int $profileId, int $forcedTreeId = 0): Session
     {
         $db     = Database::getConnection();
-        $treeId = $this->trees->getBestTreeForProfile($profileId);
+        $treeId = $forcedTreeId > 0 ? $forcedTreeId : $this->trees->getBestTreeForProfile($profileId);
         $id     = bin2hex(random_bytes(16));
 
         $db->prepare(

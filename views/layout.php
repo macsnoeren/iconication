@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="<?= rtrim(dirname(BASE_URL), '/') ?>/style.css">
 </head>
 <?php
-$fullscreen = in_array($view ?? '', ['session', 'session_waiting']);
-$noBack     = in_array($view ?? '', ['session', 'session_waiting', 'session_complete']);
+$fullscreen = in_array($view ?? '', ['session', 'session_waiting', 'home']);
+$noBack     = in_array($view ?? '', ['session', 'session_waiting', 'session_complete', 'home']);
 ?>
 <body<?= $fullscreen ? ' class="fullscreen"' : '' ?>>
 

@@ -24,10 +24,11 @@ class InteractionController
     }
 
     // ── Start nieuwe sessie ───────────────────────────────────────────────────
-    public function start(): void
+    public function start(int $forcedTreeId = 0): void
     {
-        $profileId = (int)($_GET['profile'] ?? 1);
-        $session   = $this->sessions->start($profileId);
+        $profileId    = (int)($_GET['profile'] ?? 1);
+        $forcedTreeId = $forcedTreeId ?: (int)($_GET['tree'] ?? 0);
+        $session      = $this->sessions->start($profileId, $forcedTreeId);
         $_SESSION['session_id'] = $session->id;
 
         $trees  = new TreeRepository();
@@ -194,25 +195,46 @@ class InteractionController
         $this->renderSession($sessionId, $options, $sentence);
     }
 
-    // ── Restore sessie na browser-herstart ────────────────────────────────────
+    // ── Restore sessie of toon home ───────────────────────────────────────────
     public function restore(): void
     {
         $sessionId = $_SESSION['session_id'] ?? null;
-        if (!$sessionId) { $this->start(); return; }
+        if ($sessionId) {
+            $result = $this->sessions->restore($sessionId);
+            if ($result) {
+                if ($result->options->isPending) {
+                    $this->render('session_waiting', [
+                        'jobId'    => $result->options->jobId,
+                        'sentence' => $result->sentence,
+                        'view'     => 'session_waiting',
+                    ]);
+                    return;
+                }
+                $this->renderSession($sessionId, $result->options->options, $result->sentence);
+                return;
+            }
+        }
 
-        $result = $this->sessions->restore($sessionId);
-        if (!$result) { $this->start(); return; }
+        // Geen actieve sessie — toon home of start direct
+        $trees = (new \App\Domain\Content\TreeRepository())->getAllReady();
 
-        if ($result->options->isPending) {
-            $this->render('session_waiting', [
-                'jobId'    => $result->options->jobId,
-                'sentence' => $result->sentence,
-                'view'     => 'session_waiting',
-            ]);
+        // Als er een dynamische boom klaar staat: start meteen
+        foreach ($trees as $tree) {
+            if ($tree['generation_mode'] === 'dynamic') {
+                $this->start((int)$tree['id']);
+                return;
+            }
+        }
+
+        // Meerdere statische bomen → keuzescherm
+        if (count($trees) > 1) {
+            $this->render('home', ['trees' => $trees, 'view' => 'home']);
             return;
         }
 
-        $this->renderSession($sessionId, $result->options->options, $result->sentence);
+        // Één boom → direct starten
+        $treeId = !empty($trees) ? (int)$trees[0]['id'] : 0;
+        $this->start($treeId);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
