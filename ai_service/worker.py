@@ -439,8 +439,9 @@ Al eerder getoonde opties (NIET herhalen, tenzij echt onvermijdelijk):
 
 Jouw taak:
 1. Bedenk wat de gebruiker PRECIES wil zeggen op basis van de selecties.
-2. Geef 2-4 NIEUWE, SPECIFIEKE vervolgopties die de intentie verder verfijnen.
+2. Geef PRECIES 3 NIEUWE, SPECIFIEKE vervolgopties die de intentie verder verfijnen.
 3. Vermijd vage of generieke opties zoals "Iets anders doen" of "Meer opties".
+4. Geef NOOIT opties die al in de "Al eerder getoonde opties" lijst staan.
 4. Als de intentie al duidelijk genoeg is: geef concrete eindopties met een volledige zin.
 5. Geef altijd ook een `sentence_so_far`: de best mogelijke zin die de gebruiker nu al zou kunnen zeggen, ook als nog niet compleet.
 
@@ -505,7 +506,7 @@ def _parse_dynamic_options(content: str) -> dict:
     if not match:
         raise ValueError("Geen valide JSON in dynamic-options respons")
     data        = json.loads(match.group())
-    options     = data.get("options", [])[:4]
+    options     = data.get("options", [])[:3]
     is_complete = bool(data.get("is_complete", False))
     sentence    = data.get("sentence_so_far", "")
     if not options:

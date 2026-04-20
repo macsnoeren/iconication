@@ -210,6 +210,19 @@ body.fullscreen .container {
     font-weight: 700;
 }
 
+.card--andere {
+    border-style: dashed;
+    border-color: var(--color-text-muted);
+    color: var(--color-text-muted);
+    background: #f8fafc;
+}
+
+.card--andere:active,
+.card--andere:focus-visible {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+}
+
 /* ── Sentence bar ──────────────────────────────────────────────────────────── */
 .sentence-bar {
     text-align: center;

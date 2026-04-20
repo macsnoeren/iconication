@@ -1,9 +1,9 @@
 <?php $count = count($options); ?>
 
 <?php
-$regularOptions = array_filter($options, fn($n) => empty($n['is_andere']));
-$andereOption   = array_filter($options, fn($n) => !empty($n['is_andere']));
-$count = count($regularOptions);
+$regularOptions = array_values(array_filter($options, fn($n) => empty($n['is_andere'])));
+$hasAndere      = !empty(array_filter($options, fn($n) => !empty($n['is_andere'])));
+$totalCount     = count($regularOptions) + ($hasAndere ? 1 : 0);
 ?>
 
 <div style="display:flex; flex-direction:column; flex:1; min-height:0; gap:10px;">
@@ -13,10 +13,11 @@ $count = count($regularOptions);
     <?php endif; ?>
 
     <form method="POST" action="<?= BASE_URL ?>?action=session_select" id="sel-form"
-          style="flex:1; min-height:0; display:flex; flex-direction:column; gap:10px;">
-        <input type="hidden" name="node_id" id="node-input" value="">
+          style="flex:1; min-height:0; display:flex; flex-direction:column;">
+        <input type="hidden" name="node_id"   id="node-input"   value="">
+        <input type="hidden" name="is_andere" id="andere-input" value="">
 
-        <div class="card-grid<?= $count >= 3 ? ' card-grid--4' : '' ?>" style="flex:1; min-height:0;">
+        <div class="card-grid<?= $totalCount >= 4 ? ' card-grid--4' : '' ?>" style="flex:1; min-height:0;">
             <?php foreach ($regularOptions as $node): ?>
                 <button type="button"
                         class="card<?= $node['is_leaf'] ? ' card--leaf' : '' ?>"
@@ -35,17 +36,17 @@ $count = count($regularOptions);
                     <?php endif; ?>
                 </button>
             <?php endforeach; ?>
-        </div>
 
-        <?php if ($andereOption): ?>
-            <div style="text-align:center; padding-top:4px;">
-                <button type="submit" name="is_andere" value="1"
-                        class="btn"
-                        style="font-size:.95rem; padding:10px 28px;">
-                    Iets anders
+            <?php if ($hasAndere): ?>
+                <button type="button"
+                        class="card card--andere"
+                        onclick="document.getElementById('andere-input').value='1';
+                                 document.getElementById('sel-form').submit();">
+                    <span class="card__icon">?</span>
+                    <span class="card__label">Iets anders</span>
                 </button>
-            </div>
-        <?php endif; ?>
+            <?php endif; ?>
+        </div>
     </form>
 
 </div>

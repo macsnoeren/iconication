@@ -111,9 +111,11 @@ class SessionManager
 
         $this->trees->insertDynamicNodes($session->treeId, $parentId, $depth, $aiOptions);
 
-        // Lees de zojuist ingevoegde nodes direct uit de DB (omzeilt de dynamic-mode check
-        // in IntentEngine zodat we niet direct een nieuwe AI-job queuen).
         $rawNodes = $this->trees->getChildren($session->treeId, $parentId);
+
+        // Sla op welke labels de gebruiker heeft gezien zodat toekomstige AI-jobs
+        // deze kunnen vermijden.
+        $this->logShownOptions($sessionId, $rawNodes);
 
         return new SelectResult(
             options:          \App\Domain\Intent\OptionsResult::immediate($rawNodes),
@@ -142,10 +144,7 @@ class SessionManager
         $stmt->execute([$sessionId]);
         $history = array_column($stmt->fetchAll(), 'label');
 
-        // Alle nodes die al getoond zijn in deze boom
-        $stmt2 = $db->prepare("SELECT label FROM tree_nodes WHERE tree_id = ?");
-        $stmt2->execute([$session->treeId]);
-        $shownOptions = array_column($stmt2->fetchAll(), 'label');
+        $shownOptions = $this->getShownOptions($sessionId);
 
         $selects  = $this->getSelectHistory($sessionId);
         $parentId = empty($selects) ? null : (int)end($selects)['node_id'];
@@ -213,6 +212,25 @@ class SessionManager
     {
         $labels = array_column($selects, 'label');
         return implode(' → ', $labels);
+    }
+
+    private function logShownOptions(string $sessionId, array $nodes): void
+    {
+        foreach ($nodes as $node) {
+            if (!empty($node['label'])) {
+                $this->logEvent($sessionId, 'SHOWN', null, $node['label']);
+            }
+        }
+    }
+
+    private function getShownOptions(string $sessionId): array
+    {
+        $stmt = Database::getConnection()->prepare(
+            "SELECT DISTINCT label FROM session_events
+             WHERE session_id = ? AND event_type = 'SHOWN'"
+        );
+        $stmt->execute([$sessionId]);
+        return array_column($stmt->fetchAll(), 'label');
     }
 
     private function queueWeightUpdate(string $sessionId): void

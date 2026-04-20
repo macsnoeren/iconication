@@ -94,9 +94,11 @@ class IntentEngine
         $stmt->execute([$session->id]);
         $history = array_column($stmt->fetchAll(), 'label');
 
-        // Alle labels die al getoond zijn in deze boom (herhaling voorkomen)
-        $stmt2 = $db->prepare("SELECT label FROM tree_nodes WHERE tree_id = ?");
-        $stmt2->execute([$session->treeId]);
+        // Alle labels die al getoond zijn in deze sessie (herhaling voorkomen)
+        $stmt2 = $db->prepare(
+            "SELECT DISTINCT label FROM session_events WHERE session_id = ? AND event_type = 'SHOWN'"
+        );
+        $stmt2->execute([$session->id]);
         $shownOptions = array_column($stmt2->fetchAll(), 'label');
 
         $params = json_encode([
