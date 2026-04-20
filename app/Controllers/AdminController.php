@@ -599,6 +599,24 @@ class AdminController {
         include __DIR__ . "/../../views/layout.php";
     }
 
+    // Sla alle bewerkte nodes van één boom tegelijk op (inline editor).
+    public function saveTreeNodes(int $treeId): void
+    {
+        foreach ($_POST['nodes'] ?? [] as $nodeId => $data) {
+            $nodeId    = (int)$nodeId;
+            $label     = mb_substr(trim($data['label'] ?? ''), 0, 100);
+            $imageUrl  = mb_substr(trim($data['image_url'] ?? ''), 0, 500);
+            $isLeaf    = isset($data['is_leaf']) ? 1 : 0;
+            $suggested = mb_substr(trim($data['suggested_message'] ?? ''), 0, 500);
+            if ($label === '') continue;
+            $this->db->prepare(
+                "UPDATE tree_nodes SET label=?, image_url=?, is_leaf=?, suggested_message=? WHERE id=? AND tree_id=?"
+            )->execute([$label, $imageUrl ?: null, $isLeaf, $suggested ?: null, $nodeId, $treeId]);
+        }
+        header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId#saved");
+        exit;
+    }
+
     public function editTreeNode(int $nodeId): void
     {
         $stmt = $this->db->prepare("SELECT * FROM tree_nodes WHERE id = ?");
