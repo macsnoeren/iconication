@@ -1,129 +1,93 @@
-<style>
-    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
-    .modal-content { background: white; margin: 5% auto; padding: 20px; width: 80%; max-width: 800px; border-radius: 15px; max-height: 80vh; overflow-y: auto; }
-    .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px; margin-top: 20px; }
-    .image-item { border: 2px solid #ddd; padding: 5px; cursor: pointer; border-radius: 10px; text-align: center; transition: transform 0.1s; }
-    .image-item:hover { border-color: #3498db; transform: scale(1.05); }
-    .image-item img { max-width: 100%; height: 80px; object-fit: contain; }
-    .search-box { width: 100%; padding: 12px; font-size: 1rem; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
-    .select-btn { background: #3498db; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; margin-top: 5px; font-size: 0.8rem; }
-</style>
-
-<div style="max-width: 800px; margin: 50px auto; background: white; padding: 20px; border-radius: 15px; border: 1px solid #ddd;">
-    <h2><?= $node['id'] ? 'Node Bewerken (ID: ' . $node['id'] . ')' : 'Nieuwe Node Aanmaken' ?></h2>
-    <form method="POST" action="<?= BASE_URL ?>?action=admin_save_node&topic=<?= $node['topic_id'] ?><?= $node['id'] ? '&node=' . $node['id'] : '' ?>">
-        
-        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-            <div style="flex: 1 1 0; min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; box-sizing: border-box;">
-                <h3 style="margin-top: 0;">Optie 1</h3>
-                <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($options[0]['id'] ?? '')) ?>">
-                <?php if (!empty($options[0]['image_hint'])): ?>
-                    <p style="margin: 0 0 10px; font-size: 0.85rem; color: #2980b9;">💡 Afbeelding-hint: <strong><?= htmlspecialchars($options[0]['image_hint']) ?></strong></p>
-                <?php endif; ?>
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Label:</label>
-                <input type="text" name="option_label[]" value="<?= htmlspecialchars($options[0]['label'] ?? '') ?>" required
-                       style="width:100%; box-sizing: border-box; padding:10px; margin-bottom:15px; border: 1px solid #ccc; border-radius: 5px;">
-                
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Afbeelding URL:</label>
-                <div style="display: flex; gap: 5px; margin-bottom: 15px;">
-                    <input type="text" id="img_0" name="option_image[]" value="<?= htmlspecialchars($options[0]['image_url'] ?? '') ?>" required
-                           style="flex: 1; padding:10px; border: 1px solid #ccc; border-radius: 5px;">
-                    <button type="button" class="btn" style="padding: 5px 10px; background: #3498db;" onclick="openImagePicker('img_0')">🔍</button>
-                </div>
-                
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Volgende Node ID:</label>
-                <input type="number" name="option_next_node[]" value="<?= htmlspecialchars((string)($options[0]['next_node_id'] ?? '')) ?>"
-                       style="width:100%; box-sizing: border-box; padding:10px; border: 1px solid #ccc; border-radius: 5px;">
-            </div>
-
-            <div style="flex: 1 1 0; min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; box-sizing: border-box;">
-                <h3 style="margin-top: 0;">Optie 2</h3>
-                <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($options[1]['id'] ?? '')) ?>">
-                <?php if (!empty($options[1]['image_hint'])): ?>
-                    <p style="margin: 0 0 10px; font-size: 0.85rem; color: #2980b9;">💡 Afbeelding-hint: <strong><?= htmlspecialchars($options[1]['image_hint']) ?></strong></p>
-                <?php endif; ?>
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Label:</label>
-                <input type="text" name="option_label[]" value="<?= htmlspecialchars($options[1]['label'] ?? '') ?>" required
-                       style="width:100%; box-sizing: border-box; padding:10px; margin-bottom:15px; border: 1px solid #ccc; border-radius: 5px;">
-                
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Afbeelding URL:</label>
-                <div style="display: flex; gap: 5px; margin-bottom: 15px;">
-                    <input type="text" id="img_1" name="option_image[]" value="<?= htmlspecialchars($options[1]['image_url'] ?? '') ?>" required
-                           style="flex: 1; padding:10px; border: 1px solid #ccc; border-radius: 5px;">
-                    <button type="button" class="btn" style="padding: 5px 10px; background: #3498db;" onclick="openImagePicker('img_1')">🔍</button>
-                </div>
-                
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Volgende Node ID:</label>
-                <input type="number" name="option_next_node[]" value="<?= htmlspecialchars((string)($options[1]['next_node_id'] ?? '')) ?>"
-                       style="width:100%; box-sizing: border-box; padding:10px; border: 1px solid #ccc; border-radius: 5px;">
-            </div>
-        </div>
-
-        <button type="submit" class="btn" style="width:100%; border:none; cursor:pointer; background:#2ecc71; margin-top: 20px;">Opslaan</button>
-        <a href="<?= BASE_URL ?>?action=admin_topic_nodes&topic=<?= $node['topic_id'] ?>" class="btn" 
-           style="width:100%; border:none; cursor:pointer; background:#95a5a6; margin-top: 10px; display: block; text-align: center;">Annuleren</a>
-    </form>
+<div class="page-header">
+    <h1><?= $node['id'] ? 'Node bewerken' : 'Nieuwe node' ?></h1>
+    <a href="<?= BASE_URL ?>?action=admin_topic_nodes&topic=<?= (int)$node['topic_id'] ?>" class="btn">← Terug</a>
 </div>
 
-<!-- Image Picker Modal -->
-<div id="imageModal" class="modal">
-    <div class="modal-content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3>Selecteer een bestaande afbeelding</h3>
-            <button type="button" class="btn" onclick="closeImagePicker()" style="background: #e74c3c;">Sluiten</button>
-        </div>
-        <input type="text" id="imageSearch" class="search-box" placeholder="Zoek op URL of naam..." oninput="filterImages()">
-        <div id="imageLibrary" class="image-grid">
-            <!-- Images will be loaded here -->
-        </div>
+<div style="max-width:720px;">
+    <div class="card-admin">
+        <form method="POST" action="<?= BASE_URL ?>?action=admin_save_node&topic=<?= (int)$node['topic_id'] ?><?= $node['id'] ? '&node='.$node['id'] : '' ?>">
+
+            <div id="options-list">
+                <?php foreach ($options as $i => $opt): ?>
+                <div class="option-block" data-index="<?= $i ?>">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                        <strong style="color:var(--color-primary);">Optie <?= $i + 1 ?></strong>
+                        <?php if ($i >= 2): ?>
+                            <button type="button" class="btn btn--danger" style="padding:3px 10px; font-size:.8rem;"
+                                    onclick="removeOption(this)">✕ Verwijder</button>
+                        <?php endif; ?>
+                    </div>
+                    <input type="hidden" name="option_id[]" value="<?= htmlspecialchars((string)($opt['id'] ?? '')) ?>">
+                    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <div style="flex:2; min-width:160px;">
+                            <label class="form-group" style="margin-bottom:4px; font-size:.85rem; font-weight:600;">Label</label>
+                            <input type="text" name="option_label[]" class="form-control"
+                                   value="<?= htmlspecialchars($opt['label'] ?? '') ?>" required>
+                        </div>
+                        <div style="flex:3; min-width:180px;">
+                            <label style="display:block; margin-bottom:4px; font-size:.85rem; font-weight:600;">Afbeelding URL</label>
+                            <input type="text" name="option_image[]" class="form-control"
+                                   value="<?= htmlspecialchars($opt['image_url'] ?? '') ?>">
+                        </div>
+                        <div style="flex:1; min-width:100px;">
+                            <label style="display:block; margin-bottom:4px; font-size:.85rem; font-weight:600;">Volgende node ID</label>
+                            <input type="number" name="option_next_node[]" class="form-control"
+                                   value="<?= htmlspecialchars((string)($opt['next_node_id'] ?? '')) ?>">
+                        </div>
+                    </div>
+                </div>
+                <hr style="border:none; border-top:1px solid var(--color-border); margin:14px 0;">
+                <?php endforeach; ?>
+            </div>
+
+            <button type="button" class="btn btn--accent" style="margin-bottom:16px;" onclick="addOption()">
+                + Optie toevoegen
+            </button>
+
+            <div style="display:flex; gap:10px;">
+                <button type="submit" class="btn btn--success" style="flex:1; justify-content:center; padding:12px;">Opslaan</button>
+                <a href="<?= BASE_URL ?>?action=admin_topic_nodes&topic=<?= (int)$node['topic_id'] ?>"
+                   class="btn" style="padding:12px 20px;">Annuleren</a>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
-let targetInputId = null;
-let allImages = [];
+let optionCount = <?= count($options) ?>;
 
-async function openImagePicker(inputId) {
-    targetInputId = inputId;
-    document.getElementById('imageModal').style.display = 'block';
-    
-    if (allImages.length === 0) {
-        const response = await fetch('<?= BASE_URL ?>?action=admin_get_images');
-        allImages = await response.json();
-    }
-    renderImages(allImages);
+function addOption() {
+    const list = document.getElementById('options-list');
+    const idx  = optionCount++;
+    const div  = document.createElement('div');
+    div.className = 'option-block';
+    div.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <strong style="color:var(--color-primary);">Optie ${idx + 1}</strong>
+            <button type="button" class="btn btn--danger" style="padding:3px 10px;font-size:.8rem;"
+                    onclick="removeOption(this)">✕ Verwijder</button>
+        </div>
+        <input type="hidden" name="option_id[]" value="">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="flex:2;min-width:160px;">
+                <label style="display:block;margin-bottom:4px;font-size:.85rem;font-weight:600;">Label</label>
+                <input type="text" name="option_label[]" class="form-control" required>
+            </div>
+            <div style="flex:3;min-width:180px;">
+                <label style="display:block;margin-bottom:4px;font-size:.85rem;font-weight:600;">Afbeelding URL</label>
+                <input type="text" name="option_image[]" class="form-control">
+            </div>
+            <div style="flex:1;min-width:100px;">
+                <label style="display:block;margin-bottom:4px;font-size:.85rem;font-weight:600;">Volgende node ID</label>
+                <input type="number" name="option_next_node[]" class="form-control">
+            </div>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--color-border);margin:14px 0;">`;
+    list.appendChild(div);
 }
 
-function closeImagePicker() {
-    document.getElementById('imageModal').style.display = 'none';
-}
-
-function renderImages(images) {
-    const library = document.getElementById('imageLibrary');
-    library.innerHTML = '';
-    images.forEach(url => {
-        const div = document.createElement('div');
-        div.className = 'image-item';
-        div.onclick = () => selectImage(url);
-        div.innerHTML = `<img src="${url}" onerror="this.src='https://via.placeholder.com/100?text=Error'"><div style="font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${url.split('/').pop()}</div>`;
-        library.appendChild(div);
-    });
-}
-
-function filterImages() {
-    const term = document.getElementById('imageSearch').value.toLowerCase();
-    const filtered = allImages.filter(url => url.toLowerCase().includes(term));
-    renderImages(filtered);
-}
-
-function selectImage(url) {
-    document.getElementById(targetInputId).value = url;
-    closeImagePicker();
-}
-
-// Sluit modal bij klikken buiten content
-window.onclick = function(event) {
-    const modal = document.getElementById('imageModal');
-    if (event.target == modal) closeImagePicker();
+function removeOption(btn) {
+    btn.closest('.option-block').nextElementSibling?.remove(); // remove <hr>
+    btn.closest('.option-block').remove();
 }
 </script>

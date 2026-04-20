@@ -155,10 +155,10 @@ class AdminController {
     }
 
     public function addNode(int $topicId): void {
-        $node = ['id' => null, 'topic_id' => $topicId];
+        $node    = ['id' => null, 'topic_id' => $topicId];
         $options = [
-            ['label' => '', 'image_url' => '', 'next_node_id' => null],
-            ['label' => '', 'image_url' => '', 'next_node_id' => null]
+            ['id' => null, 'label' => '', 'image_url' => '', 'next_node_id' => null],
+            ['id' => null, 'label' => '', 'image_url' => '', 'next_node_id' => null],
         ];
         $view = 'admin_node_form';
         include __DIR__ . "/../../views/layout.php";
@@ -178,46 +178,49 @@ class AdminController {
         $stmtOptions->execute([$nodeId]);
         $options = $stmtOptions->fetchAll();
 
-        // Zorg dat er altijd 2 opties zijn voor het formulier
-        while (count($options) < 2) {
-            $options[] = ['id' => null, 'label' => '', 'image_url' => '', 'next_node_id' => null];
-        }
-
         $view = 'admin_node_form';
         include __DIR__ . "/../../views/layout.php";
     }
 
     public function saveNode(int $topicId, ?int $nodeId = null): void {
-        $optionLabels = $_POST['option_label'] ?? [];
-        $optionImages = $_POST['option_image'] ?? [];
+        $optionLabels    = $_POST['option_label']     ?? [];
+        $optionImages    = $_POST['option_image']     ?? [];
         $optionNextNodes = $_POST['option_next_node'] ?? [];
-        $optionIds = $_POST['option_id'] ?? [];
+        $optionIds       = $_POST['option_id']        ?? [];
 
         if ($nodeId) {
-            // Update bestaande node (alleen topic_id is relevant hier)
-            $stmt = $this->db->prepare("UPDATE nodes SET topic_id = ? WHERE id = ?");
-            $stmt->execute([$topicId, $nodeId]);
+            $this->db->prepare("UPDATE nodes SET topic_id = ? WHERE id = ?")->execute([$topicId, $nodeId]);
         } else {
-            // Nieuwe node aanmaken
-            $stmt = $this->db->prepare("INSERT INTO nodes (topic_id) VALUES (?)");
-            $stmt->execute([$topicId]);
+            $this->db->prepare("INSERT INTO nodes (topic_id) VALUES (?)")->execute([$topicId]);
             $nodeId = (int)$this->db->lastInsertId();
         }
 
-        // Opties opslaan
-        for ($i = 0; $i < 2; $i++) { // We verwachten altijd 2 opties
-            $label = $optionLabels[$i] ?? '';
-            $image = $optionImages[$i] ?? '';
-            $nextNode = ($optionNextNodes[$i] !== '' && $optionNextNodes[$i] !== null) ? (int)$optionNextNodes[$i] : null;
-            $optionId = !empty($optionIds[$i]) ? (int)$optionIds[$i] : null;
+        // Huidige option-IDs in DB om verwijderde opties op te sporen
+        $dbIds = $this->db->prepare("SELECT id FROM options WHERE node_id = ?");
+        $dbIds->execute([$nodeId]);
+        $existingIds  = $dbIds->fetchAll(\PDO::FETCH_COLUMN);
+        $submittedIds = [];
 
-            if ($optionId !== null) {
-                $stmt = $this->db->prepare("UPDATE options SET label = ?, image_url = ?, next_node_id = ? WHERE id = ?");
-                $stmt->execute([$label, $image, $nextNode, $optionId]);
+        for ($i = 0; $i < count($optionLabels); $i++) {
+            $label    = trim($optionLabels[$i] ?? '');
+            if ($label === '') continue;
+            $image    = $optionImages[$i] ?? '';
+            $nextNode = ($optionNextNodes[$i] ?? '') !== '' ? (int)$optionNextNodes[$i] : null;
+            $optId    = !empty($optionIds[$i]) ? (int)$optionIds[$i] : null;
+
+            if ($optId) {
+                $this->db->prepare("UPDATE options SET label=?, image_url=?, next_node_id=? WHERE id=?")
+                    ->execute([$label, $image, $nextNode, $optId]);
+                $submittedIds[] = $optId;
             } else {
-                $stmt = $this->db->prepare("INSERT INTO options (node_id, label, image_url, next_node_id) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$nodeId, $label, $image, $nextNode]);
+                $this->db->prepare("INSERT INTO options (node_id, label, image_url, next_node_id) VALUES (?,?,?,?)")
+                    ->execute([$nodeId, $label, $image, $nextNode]);
             }
+        }
+
+        // Verwijder opties die uit het formulier zijn weggehaald
+        foreach (array_diff($existingIds, $submittedIds) as $delId) {
+            $this->db->prepare("DELETE FROM options WHERE id = ?")->execute([$delId]);
         }
 
         header("Location: " . BASE_URL . "?action=admin_topic_nodes&topic=$topicId");
@@ -626,6 +629,69 @@ class AdminController {
 
         // Verwijder ook alle kinderen recursief
         $this->deleteNodeRecursive($nodeId);
+
+        header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId");
+        exit;
+    }
+
+    public function addTreeNode(int $treeId, ?int $parentId = null): void
+    {
+        $stmt = $this->db->prepare("SELECT * FROM option_trees WHERE id = ?");
+        $stmt->execute([$treeId]);
+        $tree = $stmt->fetch();
+
+        // Bepaal depth op basis van parent
+        $depth = 0;
+        if ($parentId) {
+            $s = $this->db->prepare("SELECT depth FROM tree_nodes WHERE id = ?");
+            $s->execute([$parentId]);
+            $row = $s->fetch();
+            $depth = $row ? (int)$row['depth'] + 1 : 0;
+        }
+
+        $parentLabel = null;
+        if ($parentId) {
+            $s = $this->db->prepare("SELECT label FROM tree_nodes WHERE id = ?");
+            $s->execute([$parentId]);
+            $row = $s->fetch();
+            $parentLabel = $row ? $row['label'] : null;
+        }
+
+        $view = 'admin_add_tree_node';
+        include __DIR__ . "/../../views/layout.php";
+    }
+
+    public function saveNewTreeNode(): void
+    {
+        $treeId    = (int)($_POST['tree_id']    ?? 0);
+        $parentId  = ($_POST['parent_id'] ?? '') !== '' ? (int)$_POST['parent_id'] : null;
+        $label     = trim($_POST['label']    ?? '');
+        $imageUrl  = trim($_POST['image_url'] ?? '');
+        $isLeaf    = isset($_POST['is_leaf']) ? 1 : 0;
+        $suggested = trim($_POST['suggested_message'] ?? '');
+
+        if (!$treeId || $label === '') {
+            header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId");
+            exit;
+        }
+
+        $depth = 0;
+        if ($parentId) {
+            $s = $this->db->prepare("SELECT depth FROM tree_nodes WHERE id = ?");
+            $s->execute([$parentId]);
+            $row = $s->fetch();
+            $depth = $row ? (int)$row['depth'] + 1 : 0;
+        }
+
+        $sortOrder = (int)$this->db->query(
+            "SELECT COALESCE(MAX(sort_order),0)+1 FROM tree_nodes WHERE tree_id=$treeId AND " .
+            ($parentId ? "parent_id=$parentId" : "parent_id IS NULL")
+        )->fetchColumn();
+
+        $this->db->prepare(
+            "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )->execute([$treeId, $parentId, $depth, $label, $imageUrl ?: null, $isLeaf, $suggested ?: null, $sortOrder]);
 
         header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId");
         exit;

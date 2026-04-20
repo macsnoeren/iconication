@@ -89,6 +89,8 @@ if (str_starts_with($action ?? '', 'admin') || $action === 'admin_regenerate_dis
         'admin_save_tree_node'   => isset($_GET['node']) ? $admin->saveTreeNode((int)$_GET['node']) : $admin->index(),
         'admin_delete_tree_node'  => isset($_GET['node']) ? $admin->deleteTreeNode((int)$_GET['node']) : $admin->index(),
         'admin_save_as_static'    => isset($_GET['tree']) ? $admin->saveAsStaticTree((int)$_GET['tree']) : $admin->index(),
+        'admin_add_tree_node'     => isset($_GET['tree']) ? $admin->addTreeNode((int)$_GET['tree'], isset($_GET['parent']) ? (int)$_GET['parent'] : null) : $admin->index(),
+        'admin_save_new_tree_node'=> $admin->saveNewTreeNode(),
         'admin_regenerate_discovery' => (function() use ($db) {
             header('Content-Type: application/json');
             $stmt = $db->prepare("INSERT INTO ai_jobs (topic, goal, job_type) VALUES ('Ontdekking', 'Genereer', 'discovery')");

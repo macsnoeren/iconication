@@ -5,6 +5,8 @@
             <?= $tree['generation_mode'] === 'dynamic' ? '🤖 AI-boom' : '📋 Statisch' ?>
         </span>
     </h1>
+    <a href="<?= BASE_URL ?>?action=admin_add_tree_node&tree=<?= (int)$tree['id'] ?>"
+       class="btn btn--success">+ Optie toevoegen</a>
     <a href="<?= BASE_URL ?>?action=admin" class="btn">← Terug</a>
 </div>
 
@@ -54,7 +56,9 @@
                         <?= $node['is_leaf'] ? '✅' : '' ?>
                     </td>
                     <td style="text-align:center;">
-                        <div style="display:flex; gap:6px; justify-content:center;">
+                        <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+                            <a href="<?= BASE_URL ?>?action=admin_add_tree_node&tree=<?= (int)$tree['id'] ?>&parent=<?= $node['id'] ?>"
+                               class="btn btn--success" style="padding:5px 10px; font-size:.8rem;">+ Kind</a>
                             <a href="<?= BASE_URL ?>?action=admin_edit_tree_node&node=<?= $node['id'] ?>"
                                class="btn btn--accent" style="padding:5px 12px; font-size:.8rem;">Bewerken</a>
                             <a href="<?= BASE_URL ?>?action=admin_delete_tree_node&node=<?= $node['id'] ?>"
