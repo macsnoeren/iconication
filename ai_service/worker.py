@@ -479,20 +479,15 @@ Geef ALLEEN valide JSON terug, geen extra tekst."""
 
 
 def generate_dynamic_options(cfg: configparser.ConfigParser, history: list,
-                             shown_options: list = None, rejected: bool = False) -> dict:
+                             shown_options: list = None) -> dict:
     if history:
         history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(history))
     else:
         history_text = "  (dit is het begin van het gesprek)"
 
     shown = shown_options or []
-    if shown:
-        shown_text = "\n".join(f"  - {label}" for label in shown)
-    else:
-        shown_text = "  (nog geen opties getoond)"
-
-    extra = "\nDe gebruiker koos 'Iets anders' — de getoonde opties waren NIET wat hij/zij wil. Geef nu VOLLEDIG ANDERE, creatievere opties die hetzelfde doel kunnen bereiken.\n" if rejected else ""
-    prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text) + extra
+    shown_text = "\n".join(f"  - {label}" for label in shown) if shown else "  (nog geen opties getoond)"
+    prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text)
     ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
     model      = active_model(cfg)
 
@@ -539,13 +534,11 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
                 history       = params.get("history", [])
                 shown_options = params.get("shown_options", [])
                 language      = params.get("language", language)
-                rejected      = params.get("rejected", False)
             else:
                 raw_state     = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
                 history       = raw_state.get("history", [])
                 shown_options = []
-                rejected      = False
-            result    = generate_dynamic_options(cfg, history, shown_options, rejected=rejected)
+            result    = generate_dynamic_options(cfg, history, shown_options)
             for opt in result["options"]:
                 if not opt.get("image_url"):
                     opt["image_url"] = find_icon(opt.get("image_hint", ""), language)

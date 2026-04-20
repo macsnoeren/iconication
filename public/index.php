@@ -111,7 +111,8 @@ match($action) {
     'session_back'           => $interaction->back(),
     'session_confirm'        => $interaction->confirm(),
     'session_reject'         => $interaction->reject(),
-    'session_dynamic_status' => $interaction->dynamicStatus(),
-    'session_show'           => $interaction->show(),
+    'session_dynamic_status'  => $interaction->dynamicStatus(),
+    'session_dynamic_confirm' => $interaction->dynamicConfirm(),
+    'session_show'            => $interaction->show(),
     default                  => $interaction->restore(),
 };

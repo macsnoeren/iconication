@@ -12,9 +12,9 @@ use App\Core\Database;
 
 class InteractionController
 {
-    private SessionManager  $sessions;
-    private IntentEngine    $engine;
-    private TreeRepository  $trees;
+    private SessionManager $sessions;
+    private IntentEngine   $engine;
+    private TreeRepository $trees;
 
     public function __construct()
     {
@@ -33,8 +33,7 @@ class InteractionController
 
         try {
             $session = $this->sessions->start($profileId, $forcedTreeId);
-            $_SESSION['session_id']      = $session->id;
-            $_SESSION['is_dynamic_tree'] = ($this->trees->getGenerationMode($session->treeId) === 'dynamic');
+            $_SESSION['session_id'] = $session->id;
 
             $result = $this->engine->getNextOptions($session, null);
 
@@ -67,27 +66,8 @@ class InteractionController
     {
         $sessionId = $_SESSION['session_id'] ?? null;
         $nodeId    = (int)($_POST['node_id'] ?? 0);
-        $isAndere  = isset($_POST['is_andere']);
 
-        if (!$sessionId) { $this->redirectHome(); return; }
-
-        // "Iets anders" — opnieuw genereren met andere opties
-        if ($isAndere) {
-            try {
-                $jobId = $this->sessions->queueAndereOptions($sessionId);
-                $this->render('session_waiting', [
-                    'jobId'    => $jobId,
-                    'sentence' => $_SESSION['pending_sentence'] ?? '',
-                    'view'     => 'session_waiting',
-                ]);
-            } catch (\Throwable $e) {
-                error_log('InteractionController::select(andere) error: ' . $e->getMessage());
-                $this->render('error', ['message' => $e->getMessage(), 'view' => 'error']);
-            }
-            return;
-        }
-
-        if (!$nodeId) { $this->redirectHome(); return; }
+        if (!$sessionId || !$nodeId) { $this->redirectHome(); return; }
 
         try {
             $result = $this->sessions->select($sessionId, $nodeId);
@@ -211,18 +191,38 @@ class InteractionController
                 'suggested_message' => $opt['suggested_message'] ?? null,
             ], $rawOptions);
 
-            $result = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
-
+            $result   = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
             $sentence = $sentenceSoFar ?: $result->sentence;
 
-            $_SESSION['pending_options']  = $result->options->options;
-            $_SESSION['pending_sentence'] = $sentence;
-
-            echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_show']);
+            if ($isComplete) {
+                $this->sessions->setConfirming($sessionId);
+                $_SESSION['pending_sentence'] = $sentence;
+                echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_dynamic_confirm']);
+            } else {
+                $_SESSION['pending_options']  = $result->options->options;
+                $_SESSION['pending_sentence'] = $sentence;
+                echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_show']);
+            }
         } catch (\Throwable $e) {
             error_log('dynamicStatus error: ' . $e->getMessage());
             echo json_encode(['status' => 'failed']);
         }
+    }
+
+    // ── Bevestigingsscherm na dynamic poll (is_complete=true) ────────────────
+    public function dynamicConfirm(): void
+    {
+        $sessionId = $_SESSION['session_id'] ?? null;
+        $sentence  = $_SESSION['pending_sentence'] ?? '';
+        unset($_SESSION['pending_sentence']);
+
+        if (!$sessionId) { $this->redirectHome(); return; }
+
+        $this->render('session_confirm', [
+            'sentence'         => $sentence,
+            'suggestedMessage' => $sentence,
+            'view'             => 'session_confirm',
+        ]);
     }
 
     // ── Toon opties na dynamic poll ───────────────────────────────────────────
@@ -283,19 +283,6 @@ class InteractionController
 
     private function renderSession(string $sessionId, array $options, string $sentence): void
     {
-        if ($_SESSION['is_dynamic_tree'] ?? false) {
-            $hasAndere = !empty(array_filter($options, fn($n) => !empty($n['is_andere'])));
-            if (!$hasAndere) {
-                $options[] = [
-                    'id'                => 0,
-                    'label'             => 'Iets anders',
-                    'image_url'         => null,
-                    'is_leaf'           => 0,
-                    'suggested_message' => null,
-                    'is_andere'         => true,
-                ];
-            }
-        }
         $this->render('session', [
             'sessionId' => $sessionId,
             'options'   => $options,

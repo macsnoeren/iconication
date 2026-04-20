@@ -130,42 +130,9 @@ class SessionManager
         return $this->buildSentence($sessionId);
     }
 
-    // Queued een nieuwe dynamic_options job waarbij eerder getoonde opties als
-    // "afgewezen" worden meegegeven zodat de AI andere opties genereert.
-    public function queueAndereOptions(string $sessionId): int
+    public function setConfirming(string $sessionId): void
     {
-        $session = $this->load($sessionId);
-        $db      = Database::getConnection();
-
-        $stmt = $db->prepare(
-            "SELECT label FROM session_events
-             WHERE session_id = ? AND event_type = 'SELECT' ORDER BY ts ASC"
-        );
-        $stmt->execute([$sessionId]);
-        $history = array_column($stmt->fetchAll(), 'label');
-
-        $shownOptions = $this->getShownOptions($sessionId);
-
-        $selects  = $this->getSelectHistory($sessionId);
-        $parentId = empty($selects) ? null : (int)end($selects)['node_id'];
-
-        $params = json_encode([
-            'session_id'     => $sessionId,
-            'tree_id'        => $session->treeId,
-            'parent_node_id' => $parentId,
-            'history'        => $history,
-            'shown_options'  => $shownOptions,
-            'rejected'       => true,
-            'profile_id'     => $session->profileId,
-            'language'       => 'nl',
-        ]);
-
-        $db->prepare(
-            "INSERT INTO ai_jobs (job_type, topic, params_json, status)
-             VALUES ('dynamic_options', 'dynamic', ?, 'pending')"
-        )->execute([$params]);
-
-        return (int)$db->lastInsertId();
+        $this->updateState($sessionId, 'CONFIRMING');
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

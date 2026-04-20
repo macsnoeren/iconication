@@ -116,28 +116,18 @@ class TreeRepository
     }
 
     // Sla door AI gegenereerde nodes op voor een dynamische sessie-stap.
-    // Geeft de ingevoegde node-IDs terug.
+    // Voegt ook altijd een "Iets anders" sibling toe zodat de boom intact blijft.
     public function insertDynamicNodes(int $treeId, ?int $parentId, int $depth, array $options): array
     {
         $db  = Database::getConnection();
-
-        // Verwijder bestaande kinderen op dit niveau zodat "Iets anders" geen
-        // opeenstapeling van oude + nieuwe opties geeft.
-        $db->prepare(
-            "DELETE FROM tree_nodes WHERE tree_id = ? AND " .
-            ($parentId === null ? "parent_id IS NULL" : "parent_id = ?")
-        )->execute($parentId === null ? [$treeId] : [$treeId, $parentId]);
-
         $ids = [];
+
         foreach ($options as $i => $opt) {
-            $stmt = $db->prepare(
+            $db->prepare(
                 "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-            );
-            $stmt->execute([
-                $treeId,
-                $parentId,
-                $depth,
+            )->execute([
+                $treeId, $parentId, $depth,
                 $opt['label'],
                 $opt['image_url'] ?? null,
                 $opt['is_leaf']   ?? 0,
@@ -146,6 +136,13 @@ class TreeRepository
             ]);
             $ids[] = (int)$db->lastInsertId();
         }
+
+        // "Iets anders" als vaste laatste node zodat de boom volledig doorloopbaar blijft.
+        $db->prepare(
+            "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order)
+             VALUES (?, ?, ?, 'Iets anders', NULL, 0, NULL, ?)"
+        )->execute([$treeId, $parentId, $depth, count($options)]);
+
         return $ids;
     }
 }
