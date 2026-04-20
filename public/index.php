@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
-session_start();
+
+// Sla sessie over voor API-verzoeken (worker gebruikt Bearer token, geen sessie)
+$_earlyAction = $_GET['action'] ?? null;
+if (!in_array($_earlyAction, ['api_pending_jobs', 'api_submit_result', 'api_training_examples'], true)) {
+    session_start();
+}
 
 // PSR-4 Autoloader
 spl_autoload_register(function ($class) {

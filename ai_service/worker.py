@@ -151,8 +151,15 @@ def fetch_pending_jobs(php_url: str, api_key: str) -> list:
     resp.raise_for_status()
     text = resp.text.strip()
     if not text:
-        raise ValueError("Lege respons van server — controleer PHP-fouten of API key")
-    return resp.json()
+        raise ValueError("Lege respons — controleer PHP-fouten of API key")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        preview = text[:300].replace("\n", " ")
+        raise ValueError(f"Ongeldige JSON van server ({e}). Response: {preview}")
+    if not isinstance(data, list):
+        raise ValueError(f"Server gaf geen lijst terug: {data}")
+    return data
 
 
 def submit_result(php_url: str, api_key: str, job_id: int, result: dict) -> None:

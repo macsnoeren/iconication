@@ -14,7 +14,11 @@ class ApiController {
     private \PDO $db;
 
     public function __construct() {
+        // Verwijder eventuele eerdere output (PHP-warnings, whitespace) zodat
+        // de JSON-response nooit kapot gaat door onverwachte prefixes.
+        while (ob_get_level()) ob_end_clean();
         header('Content-Type: application/json');
+
         if (!Config::validateApiKey()) {
             http_response_code(401);
             echo json_encode(['error' => 'Unauthorized']);
