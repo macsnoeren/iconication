@@ -282,6 +282,8 @@ class AdminController {
             }
         }
 
+        $this->syncTopicToTree($topicId);
+
         header("Location: " . BASE_URL . "?action=admin_topic_edit&topic=$topicId#saved");
         exit;
     }
@@ -471,6 +473,10 @@ class AdminController {
             }
 
             $this->db->commit();
+
+            // 6. Sync naar nieuwe option_trees/tree_nodes schema
+            $this->syncTopicToTree($topicId);
+
         } catch (\Exception $e) {
             $this->db->rollBack();
             $_SESSION['ai_error'] = 'Databasefout bij opslaan: ' . htmlspecialchars($e->getMessage());
@@ -480,5 +486,57 @@ class AdminController {
 
         header("Location: " . BASE_URL . "?action=admin_topic_nodes&topic=" . $topicId);
         exit;
+    }
+
+    // ── Sync helpers ──────────────────────────────────────────────────────────
+
+    // Synchroniseert een topic uit de oude tabellen naar option_trees/tree_nodes.
+    // Verwijdert eerst een eventueel bestaande boom voor dit topic.
+    private function syncTopicToTree(int $topicId): void
+    {
+        $stmt = $this->db->prepare("SELECT * FROM topics WHERE id = ?");
+        $stmt->execute([$topicId]);
+        $topic = $stmt->fetch();
+        if (!$topic) return;
+
+        // Verwijder bestaande boom voor dit topic
+        $this->db->prepare("DELETE FROM tree_nodes WHERE tree_id = ?")->execute([$topicId]);
+        $this->db->prepare("DELETE FROM option_trees WHERE id = ?")->execute([$topicId]);
+
+        // Maak standaard profiel als het er nog niet is
+        $profileCount = $this->db->query("SELECT COUNT(*) FROM user_profiles")->fetchColumn();
+        if ($profileCount == 0) {
+            $this->db->exec("INSERT INTO user_profiles (id, name, language, support_level) VALUES (1, 'Standaard gebruiker', 'nl', 2)");
+        }
+
+        $this->db->prepare(
+            "INSERT INTO option_trees (id, profile_id, name, language, status, generation_mode)
+             VALUES (?, 1, ?, 'nl', 'ready', 'static')"
+        )->execute([$topicId, $topic['name']]);
+
+        if ($topic['root_node_id']) {
+            $this->syncNode($topicId, (int)$topic['root_node_id'], null, 0);
+        }
+    }
+
+    private function syncNode(int $treeId, int $oldNodeId, ?int $parentTreeNodeId, int $depth): void
+    {
+        $stmt = $this->db->prepare("SELECT * FROM options WHERE node_id = ? ORDER BY id ASC");
+        $stmt->execute([$oldNodeId]);
+        $options = $stmt->fetchAll();
+
+        foreach ($options as $i => $opt) {
+            $isLeaf = ($opt['next_node_id'] === null) ? 1 : 0;
+            $ins = $this->db->prepare(
+                "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+            );
+            $ins->execute([$treeId, $parentTreeNodeId, $depth, $opt['label'], $opt['image_url'], $isLeaf, $i]);
+            $newNodeId = (int)$this->db->lastInsertId();
+
+            if (!$isLeaf && $opt['next_node_id']) {
+                $this->syncNode($treeId, (int)$opt['next_node_id'], $newNodeId, $depth + 1);
+            }
+        }
     }
 }

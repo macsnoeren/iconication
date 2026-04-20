@@ -27,17 +27,16 @@ class ApiController {
     public function pendingJobs(): void {
         try {
             $stmt = $this->db->query(
-                "SELECT id, topic, goal, state_json, job_type FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
+                "SELECT id, topic, goal, state_json, params_json, job_type FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
             );
             echo json_encode($stmt->fetchAll());
         } catch (\Exception $e) {
-            // Fallback: kolom job_type ontbreekt in oude DB — gebruik query zonder die kolom
             try {
                 $stmt = $this->db->query(
                     "SELECT id, topic, goal, state_json FROM ai_jobs WHERE status = 'pending' ORDER BY created_at ASC"
                 );
                 $rows = $stmt->fetchAll();
-                foreach ($rows as &$r) { $r['job_type'] = 'topic'; }
+                foreach ($rows as &$r) { $r['job_type'] = 'topic'; $r['params_json'] = null; }
                 echo json_encode($rows);
             } catch (\Exception $e2) {
                 echo json_encode([]);

@@ -2,162 +2,114 @@
 declare(strict_types=1);
 session_start();
 
-// 1. PSR-4 Autoloader (zonder Composer)
+// PSR-4 Autoloader
 spl_autoload_register(function ($class) {
-    $prefix = 'App\\';
-    $base_dir = dirname(__DIR__) . '/app/';
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) return;
-    $relative_class = substr($class, $len);
-    // Vervang backslashes door forward slashes voor Linux servers
-    $relative_class_path = str_replace('\\', '/', $relative_class);
-    $file = $base_dir . $relative_class_path . '.php';
-    
+    $prefix  = 'App\\';
+    $baseDir = dirname(__DIR__) . '/app/';
+    if (strncmp($prefix, $class, strlen($prefix)) !== 0) return;
+    $relative = str_replace('\\', '/', substr($class, strlen($prefix)));
+    $file = $baseDir . $relative . '.php';
     if (file_exists($file)) require $file;
 });
 
-// 2. Simpele Router
-$scriptName = $_SERVER['SCRIPT_NAME']; // /iconication/public/index.php
-$scriptPath = str_replace('\\', '/', dirname($scriptName)); // /iconication/public
-define('BASE_URL', $scriptName); // /iconication/public/index.php
+$scriptName = $_SERVER['SCRIPT_NAME'];
+define('BASE_URL', $scriptName);
 
-use App\Controllers\TopicController;
-use App\Controllers\AuthController;
-use App\Controllers\AdminController;
-use App\Controllers\ApiController;
-$controller = new TopicController();
-
-// Routing op basis van GET variabelen
-$topicId = isset($_GET['topic']) ? (int)$_GET['topic'] : null;
-$nodeId = isset($_GET['node']) ? (int)$_GET['node'] : null;
 $action = $_GET['action'] ?? null;
 
-// Check of er users zijn. Zo niet, forceer setup.
-$db = \App\Core\Database::getConnection();
+// Zorg dat er users zijn
+$db        = \App\Core\Database::getConnection();
 $userCount = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
-
 if ($userCount == 0 && $action !== 'setup') {
-    header("Location: " . BASE_URL . "?action=setup");
+    header("Location: " . BASE_URL . "?action=setup"); exit;
+}
+
+// ── Interactie (nieuwe architectuur) ────────────────────────────────────────
+$interaction = new \App\Controllers\InteractionController();
+
+$sessionRoutes = [
+    'session_start'          => fn() => $interaction->start(),
+    'session_select'         => fn() => $interaction->select(),
+    'session_back'           => fn() => $interaction->back(),
+    'session_confirm'        => fn() => $interaction->confirm(),
+    'session_reject'         => fn() => $interaction->reject(),
+    'session_dynamic_status' => fn() => $interaction->dynamicStatus(),
+    'session_show'           => fn() => $interaction->show(),
+];
+
+if (isset($sessionRoutes[$action])) {
+    ($sessionRoutes[$action])();
     exit;
 }
 
-if ($action === 'back' && $topicId) {
-    $controller->back($topicId);
-} elseif ($action === 'reset' && $topicId) {
-    $controller->reset($topicId);
-} elseif ($action === 'setup') {
-    (new AuthController())->setup();
-} elseif ($action === 'login') {
-    (new AuthController())->login();
-} elseif ($action === 'logout') {
-    (new AuthController())->logout();
-} elseif ($action === 'change_password') {
-    (new AuthController())->changePassword();
-} elseif (strpos($action ?? '', 'admin') === 0) { // Admin acties
-    $admin = new AdminController();
-    if ($action === 'admin') {
-        $admin->index();
-    } elseif ($action === 'admin_topic_delete' && $topicId) {
-        $admin->deleteTopic($topicId);
-    } elseif ($action === 'admin_add_topic') {
-        $admin->addTopic();
-    } elseif ($action === 'admin_save_topic') {
-        $admin->saveTopic($topicId);
-    } elseif ($action === 'admin_topic_nodes' && $topicId) {
-        $admin->showTopicNodes($topicId);
-    } elseif ($action === 'admin_add_node' && $topicId) {
-        $admin->addNode($topicId);
-    } elseif ($action === 'admin_edit_node' && $topicId && $nodeId) {
-        $admin->editNode($topicId, $nodeId);
-    } elseif ($action === 'admin_save_node' && $topicId) { // nodeId kan null zijn voor nieuwe node
-        $admin->saveNode($topicId, $nodeId);
-    } elseif ($action === 'admin_delete_node' && $topicId && $nodeId) {
-        $admin->deleteNode($topicId, $nodeId);
-    } elseif ($action === 'admin_get_images') {
-        $admin->getExistingImages();
-    } elseif ($action === 'admin_training') {
-        $admin->showTraining();
-    } elseif ($action === 'admin_save_training') {
-        $admin->saveTraining();
-    } elseif ($action === 'admin_topic_edit' && $topicId) {
-        $admin->showTopicEdit($topicId);
-    } elseif ($action === 'admin_save_topic_edit' && $topicId) {
-        $admin->saveTopicEdit($topicId);
-    } elseif ($action === 'admin_ai_generate') {
-        $admin->aiGenerateTopic();
-    } elseif ($action === 'admin_ai_queue') {
-        $admin->aiQueueTopic();
-    } elseif ($action === 'admin_ai_waiting' && isset($_GET['job'])) {
-        $admin->aiWaiting((int)$_GET['job']);
-    } elseif ($action === 'admin_ai_job_status' && isset($_GET['job'])) {
-        $admin->aiJobStatus((int)$_GET['job']);
-    } elseif ($action === 'admin_ai_preview' && isset($_GET['job'])) {
-        $admin->aiPreviewJob((int)$_GET['job']);
-    } elseif ($action === 'admin_ai_save') {
-        $admin->aiSaveTopic();
-    } else {
-        // Als een admin actie is aangevraagd maar niet specifiek gematcht,
-        // redirect naar het admin dashboard om doorvallen te voorkomen.
-        header("Location: " . BASE_URL . "?action=admin");
-        exit;
-    }
-} elseif ($action === 'api_pending_jobs') {
-    (new ApiController())->pendingJobs();
-} elseif ($action === 'api_submit_result') {
-    (new ApiController())->submitResult();
-} elseif ($action === 'api_training_examples') {
-    (new ApiController())->trainingExamples();
-} elseif ($action === 'admin_regenerate_discovery') {
-    header('Content-Type: application/json');
-    // Verwijder oude discovery tree en queue nieuwe generatie
-    $discPath = dirname(__DIR__) . '/storage/discovery_tree.json';
-    if (file_exists($discPath)) unlink($discPath);
-    $stmt = $db->prepare("INSERT INTO ai_jobs (topic, goal, job_type) VALUES ('Ontdekking', 'Genereer ontdekkers-boom', 'discovery')");
-    $stmt->execute();
-    $jobId = (int)$db->lastInsertId();
-    echo json_encode(['redirect' => BASE_URL . "?action=discovery_waiting&job=$jobId"]);
+// ── Auth ─────────────────────────────────────────────────────────────────────
+$auth = new \App\Controllers\AuthController();
+$authRoutes = [
+    'setup'           => fn() => $auth->setup(),
+    'login'           => fn() => $auth->login(),
+    'logout'          => fn() => $auth->logout(),
+    'change_password' => fn() => $auth->changePassword(),
+];
+
+if (isset($authRoutes[$action])) {
+    ($authRoutes[$action])();
     exit;
-} elseif ($action === 'dynamic_status' && isset($_GET['job'])) {
-    $controller->dynamicStatus((int)$_GET['job']);
-} elseif ($action === 'dynamic_show') {
-    $controller->showDynamic();
-} elseif ($action === 'dynamic_select') {
-    $controller->selectDynamic();
-} elseif ($action === 'dynamic_back') {
-    $controller->backDynamic();
-} elseif ($action === 'start_discovery') {
-    $controller->startDiscovery();
-} elseif ($action === 'discovery_nav') {
-    $controller->navigateDiscovery();
-} elseif ($action === 'discovery_confirm') {
-    $controller->showDiscoveryConfirm();
-} elseif ($action === 'discovery_confirm_yes') {
-    $controller->confirmDiscoveryYes();
-} elseif ($action === 'discovery_waiting' && isset($_GET['job'])) {
-    $controller->discoveryWaiting((int)$_GET['job']);
-} elseif ($action === 'discovery_waiting_status' && isset($_GET['job'])) {
-    $controller->discoveryWaitingStatus((int)$_GET['job']);
-} elseif ($action === 'discovery_topic_waiting' && isset($_GET['job'])) {
-    $controller->discoveryTopicWaiting((int)$_GET['job'], $_GET['topic_name'] ?? '');
-} elseif ($action === 'discovery_topic_status' && isset($_GET['job'])) {
-    $controller->discoveryTopicStatus((int)$_GET['job'], $_GET['topic_name'] ?? '');
-} elseif ($action === 'topic_complete' && $topicId) {
-    $controller->showComplete($topicId);
-} elseif ($action === 'topic_followup' && $topicId) {
-    $controller->requestFollowup($topicId);
-} elseif ($action === 'topic_followup_waiting' && $topicId && isset($_GET['job'])) {
-    $controller->showFollowupWaiting((int)$_GET['job'], $topicId);
-} elseif ($action === 'topic_followup_status' && isset($_GET['job']) && $topicId) {
-    $controller->applyFollowup((int)$_GET['job'], $topicId);
-} elseif ($action === 'topic_followup_start' && $topicId) {
-    $controller->startFollowup($topicId);
-} elseif ($action === 'topic_followup_nav' && $topicId) {
-    $controller->navigateFollowup($topicId);
-} elseif ($topicId && $nodeId) {
-    $controller->showNode($topicId, $nodeId);
-} elseif ($topicId) {
-    $controller->start($topicId);
-} else {
-    // Alles wat niet gematcht is, inclusief lege GET: start de dynamische AI-stroom
-    $controller->index();
 }
+
+// ── Admin ────────────────────────────────────────────────────────────────────
+if (str_starts_with($action ?? '', 'admin') || $action === 'admin_regenerate_discovery') {
+    $topicId = isset($_GET['topic']) ? (int)$_GET['topic'] : null;
+    $nodeId  = isset($_GET['node'])  ? (int)$_GET['node']  : null;
+    $admin   = new \App\Controllers\AdminController();
+
+    match($action) {
+        'admin'                   => $admin->index(),
+        'admin_topic_delete'      => $topicId ? $admin->deleteTopic($topicId)     : $admin->index(),
+        'admin_add_topic'         => $admin->addTopic(),
+        'admin_save_topic'        => $admin->saveTopic($topicId),
+        'admin_topic_nodes'       => $topicId ? $admin->showTopicNodes($topicId)  : $admin->index(),
+        'admin_add_node'          => $topicId ? $admin->addNode($topicId)         : $admin->index(),
+        'admin_edit_node'         => ($topicId && $nodeId) ? $admin->editNode($topicId, $nodeId) : $admin->index(),
+        'admin_save_node'         => $topicId ? $admin->saveNode($topicId, $nodeId) : $admin->index(),
+        'admin_delete_node'       => ($topicId && $nodeId) ? $admin->deleteNode($topicId, $nodeId) : $admin->index(),
+        'admin_get_images'        => $admin->getExistingImages(),
+        'admin_training'          => $admin->showTraining(),
+        'admin_save_training'     => $admin->saveTraining(),
+        'admin_topic_edit'        => $topicId ? $admin->showTopicEdit($topicId)   : $admin->index(),
+        'admin_save_topic_edit'   => $topicId ? $admin->saveTopicEdit($topicId)   : $admin->index(),
+        'admin_ai_generate'       => $admin->aiGenerateTopic(),
+        'admin_ai_queue'          => $admin->aiQueueTopic(),
+        'admin_ai_waiting'        => isset($_GET['job']) ? $admin->aiWaiting((int)$_GET['job']) : $admin->index(),
+        'admin_ai_job_status'     => isset($_GET['job']) ? $admin->aiJobStatus((int)$_GET['job']) : $admin->index(),
+        'admin_ai_preview'        => isset($_GET['job']) ? $admin->aiPreviewJob((int)$_GET['job']) : $admin->index(),
+        'admin_ai_save'           => $admin->aiSaveTopic(),
+        'admin_regenerate_discovery' => (function() use ($db) {
+            header('Content-Type: application/json');
+            $discPath = dirname(__DIR__) . '/storage/discovery_tree.json';
+            if (file_exists($discPath)) unlink($discPath);
+            $stmt = $db->prepare("INSERT INTO ai_jobs (topic, goal, job_type) VALUES ('Ontdekking', 'Genereer ontdekkers-boom', 'discovery')");
+            $stmt->execute();
+            $jobId = (int)$db->lastInsertId();
+            echo json_encode(['redirect' => BASE_URL . "?action=discovery_waiting&job=$jobId"]);
+            exit;
+        })(),
+        default => (function() { header("Location: " . BASE_URL . "?action=admin"); exit; })(),
+    };
+    exit;
+}
+
+// ── Worker API ───────────────────────────────────────────────────────────────
+$api = new \App\Controllers\ApiController();
+$apiRoutes = [
+    'api_pending_jobs'       => fn() => $api->pendingJobs(),
+    'api_submit_result'      => fn() => $api->submitResult(),
+    'api_training_examples'  => fn() => $api->trainingExamples(),
+];
+
+if (isset($apiRoutes[$action])) {
+    ($apiRoutes[$action])();
+    exit;
+}
+
+// ── Fallback: start nieuwe sessie ────────────────────────────────────────────
+$interaction->restore();

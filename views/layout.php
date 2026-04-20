@@ -30,11 +30,19 @@
                      text-decoration: none; color: var(--primary); font-size: 2rem; font-weight: bold; border: 4px solid #ccc; }
     </style>
 </head>
-<body<?= in_array($view ?? '', ['node', 'followup_node', 'discovery_node', 'dynamic_options', 'dynamic_waiting']) ? ' class="fullscreen"' : '' ?>>
+<?php
+$fullscreenViews = ['node', 'session', 'session_waiting', 'followup_node', 'discovery_node', 'dynamic_options', 'dynamic_waiting'];
+$noBackViews     = ['session', 'session_waiting', 'session_complete', 'discovery_node', 'discovery_waiting',
+                    'discovery_confirm', 'dynamic_options', 'dynamic_waiting', 'home'];
+?>
+<body<?= in_array($view ?? '', $fullscreenViews) ? ' class="fullscreen"' : '' ?>>
     <div class="header">
-        <?php if(!in_array($view ?? '', ['discovery_node', 'discovery_waiting', 'discovery_confirm',
-                                          'dynamic_options', 'dynamic_waiting', 'home'])): ?>
-            <?php if(($topicId ?? 0) > 0): ?>
+        <?php if (!in_array($view ?? '', $noBackViews)): ?>
+            <?php if (($view ?? '') === 'session_confirm'): ?>
+                <form method="POST" action="<?= BASE_URL ?>?action=session_back" style="margin:0;">
+                    <button type="submit" class="btn">⬅ Terug</button>
+                </form>
+            <?php elseif (($topicId ?? 0) > 0): ?>
                 <a href="<?= BASE_URL ?>?topic=<?= $topicId ?>&action=back" class="btn">⬅ Terug</a>
             <?php else: ?>
                 <a href="<?= BASE_URL ?>" class="btn">⬅ Terug</a>

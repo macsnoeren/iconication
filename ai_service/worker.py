@@ -506,18 +506,25 @@ def _parse_dynamic_options(content: str) -> dict:
 # ─── Job verwerking ──────────────────────────────────────────────────────────
 
 def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job: dict) -> None:
-    job_id     = job["id"]
-    topic      = job["topic"]
-    goal       = job.get("goal", "")
-    state_json = job.get("state_json") or ""
-    job_type   = job.get("job_type") or "topic"
-    language   = get(cfg, "ai", "arasaac_language", "nl")
+    job_id      = job["id"]
+    topic       = job["topic"]
+    goal        = job.get("goal", "")
+    state_json  = job.get("state_json") or ""
+    params_json = job.get("params_json") or ""
+    job_type    = job.get("job_type") or "topic"
+    language    = get(cfg, "ai", "arasaac_language", "nl")
 
     print(f"  → Job #{job_id}: '{topic}' [{job_type}]")
     try:
         if job_type == "dynamic_options":
-            raw_state = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
-            history   = raw_state.get("history", [])
+            # Lees history uit params_json (nieuwe stijl) of state_json (oud, backward-compat)
+            if params_json.strip() and params_json.strip() != "null":
+                params  = json.loads(params_json)
+                history = params.get("history", [])
+                language = params.get("language", language)
+            else:
+                raw_state = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
+                history   = raw_state.get("history", [])
             result    = generate_dynamic_options(cfg, history)
             for opt in result["options"]:
                 if not opt.get("image_url"):
