@@ -457,8 +457,7 @@ Voorbeeld (intentie nog onduidelijk):
   "options": [
     {{"label": "Naar de bioscoop", "image_hint": "bioscoop film"}},
     {{"label": "Naar het park", "image_hint": "park buiten"}},
-    {{"label": "Naar een restaurant", "image_hint": "restaurant eten"}},
-    {{"label": "Iets thuis doen", "image_hint": "huis thuis"}}
+    {{"label": "Naar een restaurant", "image_hint": "restaurant eten"}}
   ]
 }}
 

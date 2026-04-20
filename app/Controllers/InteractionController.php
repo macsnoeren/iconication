@@ -12,16 +12,17 @@ use App\Core\Database;
 
 class InteractionController
 {
-    private SessionManager $sessions;
-    private IntentEngine   $engine;
+    private SessionManager  $sessions;
+    private IntentEngine    $engine;
+    private TreeRepository  $trees;
 
     public function __construct()
     {
-        $trees          = new TreeRepository();
+        $this->trees    = new TreeRepository();
         $model          = new IntentModel();
         $profiles       = new ProfileRepository();
-        $this->engine   = new IntentEngine($trees, $model, $profiles);
-        $this->sessions = new SessionManager($trees, $this->engine);
+        $this->engine   = new IntentEngine($this->trees, $model, $profiles);
+        $this->sessions = new SessionManager($this->trees, $this->engine);
     }
 
     // ── Start nieuwe sessie ───────────────────────────────────────────────────
@@ -32,7 +33,8 @@ class InteractionController
 
         try {
             $session = $this->sessions->start($profileId, $forcedTreeId);
-            $_SESSION['session_id'] = $session->id;
+            $_SESSION['session_id']      = $session->id;
+            $_SESSION['is_dynamic_tree'] = ($this->trees->getGenerationMode($session->treeId) === 'dynamic');
 
             $result = $this->engine->getNextOptions($session, null);
 
@@ -211,20 +213,9 @@ class InteractionController
 
             $result = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
 
-            // Voeg "Iets anders" toe als permanente extra optie (niet door AI gegenereerd)
-            $options = $result->options->options;
-            $options[] = [
-                'id'                => 0,
-                'label'             => 'Iets anders',
-                'image_url'         => null,
-                'is_leaf'           => 0,
-                'suggested_message' => null,
-                'is_andere'         => true,
-            ];
-
             $sentence = $sentenceSoFar ?: $result->sentence;
 
-            $_SESSION['pending_options']  = $options;
+            $_SESSION['pending_options']  = $result->options->options;
             $_SESSION['pending_sentence'] = $sentence;
 
             echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_show']);
@@ -292,6 +283,19 @@ class InteractionController
 
     private function renderSession(string $sessionId, array $options, string $sentence): void
     {
+        if ($_SESSION['is_dynamic_tree'] ?? false) {
+            $hasAndere = !empty(array_filter($options, fn($n) => !empty($n['is_andere'])));
+            if (!$hasAndere) {
+                $options[] = [
+                    'id'                => 0,
+                    'label'             => 'Iets anders',
+                    'image_url'         => null,
+                    'is_leaf'           => 0,
+                    'suggested_message' => null,
+                    'is_andere'         => true,
+                ];
+            }
+        }
         $this->render('session', [
             'sessionId' => $sessionId,
             'options'   => $options,
