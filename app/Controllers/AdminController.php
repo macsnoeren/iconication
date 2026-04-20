@@ -94,6 +94,17 @@ class AdminController {
         exit;
     }
 
+    public function renameTree(): void
+    {
+        $treeId = (int)($_POST['tree_id'] ?? 0);
+        $name   = mb_substr(trim($_POST['name'] ?? ''), 0, 100);
+        if ($treeId && $name !== '') {
+            $this->db->prepare("UPDATE option_trees SET name = ? WHERE id = ?")->execute([$name, $treeId]);
+        }
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
+    }
+
     public function deleteTree(int $treeId): void
     {
         $stmt = $this->db->prepare("SELECT name, generation_mode FROM option_trees WHERE id = ?");

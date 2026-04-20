@@ -513,10 +513,25 @@ def generate_dynamic_options(cfg: configparser.ConfigParser, history: list,
     if not history:
         prompt = DYNAMIC_OPTIONS_PROMPT_START
     else:
-        history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(history))
+        # Als de gebruiker "Iets anders" koos: verwijder dat uit de history
+        # en voeg een expliciete instructie toe zodat de AI alternatieven geeft
+        # binnen de bestaande context, niet opnieuw vanaf het begin.
+        effective_history = list(history)
+        andere_note = ""
+        if effective_history and effective_history[-1].lower() in ("iets anders", "something else"):
+            effective_history.pop()
+            andere_note = (
+                "\n\nLET OP: De gebruiker koos 'Iets anders' — dat betekent dat de eerder "
+                "getoonde opties niet pasten. Geef nu ANDERE opties die nog steeds passen "
+                "bij de bovenstaande selectiegeschiedenis. Herhaal NOOIT opties uit de "
+                "'Al eerder getoonde opties' lijst."
+            )
+
+        history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(effective_history)) \
+                       if effective_history else "  (dit is het begin van het gesprek)"
         shown = shown_options or []
         shown_text = "\n".join(f"  - {label}" for label in shown) if shown else "  (nog geen opties getoond)"
-        prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text)
+        prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text) + andere_note
     ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
     model      = active_model(cfg)
 

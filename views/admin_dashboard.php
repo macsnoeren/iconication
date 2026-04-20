@@ -5,6 +5,74 @@ $hasDynamic  = !empty(array_filter($trees ?? [], fn($t) => $t['generation_mode']
 $activeTree  = array_filter($trees ?? [], fn($t) => $t['status'] === 'ready' && $t['generation_mode'] === 'dynamic');
 $activeTree  = reset($activeTree) ?: null;
 ?>
+<style>
+.confirm-overlay {
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.45); z-index:1000;
+    align-items:center; justify-content:center;
+}
+.confirm-overlay.open { display:flex; }
+.confirm-box {
+    background:#fff; border-radius:18px;
+    padding:32px 28px; max-width:360px; width:90%;
+    box-shadow:0 8px 40px rgba(0,0,0,.18);
+    text-align:center;
+}
+.confirm-box h3 { margin:0 0 8px; font-size:1.15rem; color:var(--color-danger); }
+.confirm-box p  { margin:0 0 24px; color:#555; font-size:.95rem; }
+.confirm-btns   { display:flex; gap:12px; justify-content:center; }
+.confirm-btns a, .confirm-btns button {
+    flex:1; padding:14px 0; font-size:1rem; font-weight:700;
+    border-radius:12px; border:none; cursor:pointer; text-decoration:none;
+    display:inline-block; text-align:center;
+}
+.confirm-yes { background:var(--color-danger); color:#fff; }
+.confirm-yes:hover { filter:brightness(.9); }
+.confirm-no  { background:#f0f0f0; color:#333; }
+.confirm-no:hover { background:#e0e0e0; }
+</style>
+
+<div class="confirm-overlay" id="del-overlay">
+    <div class="confirm-box">
+        <h3>Boom verwijderen</h3>
+        <p id="del-msg"></p>
+        <div class="confirm-btns">
+            <a id="del-yes" href="#" class="confirm-yes">Ja, verwijderen</a>
+            <button class="confirm-no" onclick="document.getElementById('del-overlay').classList.remove('open')">Nee, terug</button>
+        </div>
+    </div>
+</div>
+
+<div class="confirm-overlay" id="rename-overlay">
+    <div class="confirm-box">
+        <h3 style="color:var(--color-accent);">Naam wijzigen</h3>
+        <form id="rename-form" method="POST" action="<?= BASE_URL ?>?action=admin_rename_tree">
+            <input type="hidden" name="tree_id" id="rename-tree-id">
+            <input type="text" name="name" id="rename-input"
+                   style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:1rem;
+                          border:1px solid #ddd; border-radius:10px; margin-bottom:20px; outline:none;"
+                   maxlength="100" required>
+            <div class="confirm-btns">
+                <button type="submit" class="confirm-yes" style="background:var(--color-accent);">Opslaan</button>
+                <button type="button" class="confirm-no" onclick="document.getElementById('rename-overlay').classList.remove('open')">Annuleren</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function confirmDeleteTree(url, name) {
+    document.getElementById('del-msg').textContent = 'Weet je zeker dat je "' + name + '" wilt verwijderen?';
+    document.getElementById('del-yes').href = url;
+    document.getElementById('del-overlay').classList.add('open');
+}
+function openRename(treeId, currentName) {
+    document.getElementById('rename-tree-id').value = treeId;
+    document.getElementById('rename-input').value = currentName;
+    document.getElementById('rename-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('rename-input').focus(), 50);
+}
+</script>
 
 <!-- AI gespreks-modus -->
 <div class="card-admin" style="margin-bottom:20px;">
@@ -65,6 +133,9 @@ $activeTree  = reset($activeTree) ?: null;
                         <div style="display:flex; gap:6px; flex-wrap:wrap;">
                             <a href="<?= BASE_URL ?>?action=admin_tree_nodes&tree=<?= $tree['id'] ?>"
                                class="btn btn--accent" style="padding:5px 12px; font-size:.8rem;">Opties</a>
+                            <button class="btn" style="padding:5px 12px; font-size:.8rem;"
+                               onclick="openRename(<?= $tree['id'] ?>, '<?= htmlspecialchars(addslashes($tree['name'])) ?>')">
+                               Hernoemen</button>
                             <?php if ($tree['generation_mode'] === 'dynamic'): ?>
                                 <a href="<?= BASE_URL ?>?action=admin_save_as_static&tree=<?= $tree['id'] ?>"
                                    class="btn btn--success" style="padding:5px 12px; font-size:.8rem;"
@@ -76,10 +147,9 @@ $activeTree  = reset($activeTree) ?: null;
                             <?php else: ?>
                                 <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=dynamic"
                                    class="btn btn--purple" style="padding:5px 12px; font-size:.8rem;">Zet AI</a>
-                                <a href="<?= BASE_URL ?>?action=admin_delete_tree&tree=<?= $tree['id'] ?>"
-                                   class="btn btn--danger" style="padding:5px 12px; font-size:.8rem;"
-                                   onclick="return confirm('Verwijder boom \'<?= htmlspecialchars(addslashes($tree['name'])) ?>\' en alle nodes?')">
-                                   Verwijderen</a>
+                                <button class="btn btn--danger" style="padding:5px 12px; font-size:.8rem;"
+                                   onclick="confirmDeleteTree('<?= BASE_URL ?>?action=admin_delete_tree&tree=<?= $tree['id'] ?>', '<?= htmlspecialchars(addslashes($tree['name'])) ?>')">
+                                   Verwijderen</button>
                             <?php endif; ?>
                         </div>
                     </td>
