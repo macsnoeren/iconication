@@ -59,6 +59,27 @@ class AdminController {
         exit;
     }
 
+    // Kopieert de huidige staat van een dynamische boom als nieuwe statische boom.
+    public function saveAsStaticTree(int $treeId): void {
+        $stmt = $this->db->prepare("SELECT * FROM option_trees WHERE id = ?");
+        $stmt->execute([$treeId]);
+        $tree = $stmt->fetch();
+
+        if (!$tree) { header("Location: " . BASE_URL . "?action=admin"); exit; }
+
+        $cntStmt = $this->db->prepare("SELECT COUNT(*) FROM tree_nodes WHERE tree_id = ?");
+        $cntStmt->execute([$treeId]);
+        if ((int)$cntStmt->fetchColumn() === 0) {
+            header("Location: " . BASE_URL . "?action=admin"); exit;
+        }
+
+        $name = ($tree['name'] ?? 'AI boom') . ' — ' . date('d-m-Y H:i');
+        (new \App\Domain\Content\TreeRepository())->copyAsStaticTree($treeId, $name);
+
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
+    }
+
     // Verander de generation_mode van één specifieke boom.
     public function setTreeMode(int $treeId, string $mode): void {
         $mode = $mode === 'dynamic' ? 'dynamic' : 'static';

@@ -75,6 +75,46 @@ class TreeRepository
             ->fetchAll();
     }
 
+    // Kopieert een bestaande boom als nieuwe statische boom.
+    // Parent-ID's worden opnieuw gemapped zodat de structuur intact blijft.
+    public function copyAsStaticTree(int $sourceTreeId, string $name): int
+    {
+        $db = Database::getConnection();
+
+        $db->prepare(
+            "INSERT INTO option_trees (profile_id, name, language, status, generation_mode)
+             SELECT profile_id, ?, language, 'ready', 'static' FROM option_trees WHERE id = ?"
+        )->execute([$name, $sourceTreeId]);
+        $newTreeId = (int)$db->lastInsertId();
+
+        $stmt = $db->prepare(
+            "SELECT * FROM tree_nodes WHERE tree_id = ? ORDER BY depth ASC, id ASC"
+        );
+        $stmt->execute([$sourceTreeId]);
+        $nodes = $stmt->fetchAll();
+
+        $idMap = [];
+        foreach ($nodes as $node) {
+            $newParentId = $node['parent_id'] === null ? null : ($idMap[$node['parent_id']] ?? null);
+            $db->prepare(
+                "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            )->execute([
+                $newTreeId,
+                $newParentId,
+                $node['depth'],
+                $node['label'],
+                $node['image_url'],
+                $node['is_leaf'],
+                $node['suggested_message'],
+                $node['sort_order'],
+            ]);
+            $idMap[$node['id']] = (int)$db->lastInsertId();
+        }
+
+        return $newTreeId;
+    }
+
     // Sla door AI gegenereerde nodes op voor een dynamische sessie-stap.
     // Geeft de ingevoegde node-IDs terug.
     public function insertDynamicNodes(int $treeId, ?int $parentId, int $depth, array $options): array

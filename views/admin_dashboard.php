@@ -66,6 +66,11 @@ $activeTree  = reset($activeTree) ?: null;
                             <a href="<?= BASE_URL ?>?action=admin_tree_nodes&tree=<?= $tree['id'] ?>"
                                class="btn btn--accent" style="padding:5px 12px; font-size:.8rem;">Opties</a>
                             <?php if ($tree['generation_mode'] === 'dynamic'): ?>
+                                <a href="<?= BASE_URL ?>?action=admin_save_as_static&tree=<?= $tree['id'] ?>"
+                                   class="btn btn--success" style="padding:5px 12px; font-size:.8rem;"
+                                   onclick="return confirm('Sla huidige AI-boom op als nieuwe statische boom?')">
+                                   Sla op als statisch
+                                </a>
                                 <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=static"
                                    class="btn" style="padding:5px 12px; font-size:.8rem;">Zet statisch</a>
                             <?php else: ?>
