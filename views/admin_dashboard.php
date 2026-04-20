@@ -76,6 +76,10 @@ $activeTree  = reset($activeTree) ?: null;
                             <?php else: ?>
                                 <a href="<?= BASE_URL ?>?action=admin_set_tree_mode&tree=<?= $tree['id'] ?>&mode=dynamic"
                                    class="btn btn--purple" style="padding:5px 12px; font-size:.8rem;">Zet AI</a>
+                                <a href="<?= BASE_URL ?>?action=admin_delete_tree&tree=<?= $tree['id'] ?>"
+                                   class="btn btn--danger" style="padding:5px 12px; font-size:.8rem;"
+                                   onclick="return confirm('Verwijder boom \'<?= htmlspecialchars(addslashes($tree['name'])) ?>\' en alle nodes?')">
+                                   Verwijderen</a>
                             <?php endif; ?>
                         </div>
                     </td>

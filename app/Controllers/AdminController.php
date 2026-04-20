@@ -94,6 +94,25 @@ class AdminController {
         exit;
     }
 
+    public function deleteTree(int $treeId): void
+    {
+        $stmt = $this->db->prepare("SELECT name, generation_mode FROM option_trees WHERE id = ?");
+        $stmt->execute([$treeId]);
+        $tree = $stmt->fetch();
+
+        // AI Gesprek mag niet verwijderd worden
+        if (!$tree || $tree['generation_mode'] === 'dynamic') {
+            header("Location: " . BASE_URL . "?action=admin");
+            exit;
+        }
+
+        $this->db->prepare("DELETE FROM tree_nodes WHERE tree_id = ?")->execute([$treeId]);
+        $this->db->prepare("DELETE FROM option_trees WHERE id = ?")->execute([$treeId]);
+
+        header("Location: " . BASE_URL . "?action=admin");
+        exit;
+    }
+
     public function deleteTopic(int $id): void {
         // Verwijder eerst alle nodes en opties die bij dit topic horen
         $stmtNodes = $this->db->prepare("SELECT id FROM nodes WHERE topic_id = ?");
