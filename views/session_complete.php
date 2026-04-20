@@ -1,27 +1,19 @@
-<div style="display:flex; flex-direction:column; align-items:center; justify-content:center;
-            flex:1; gap:28px; padding:40px 24px; text-align:center;">
-
-    <div style="font-size:4rem;">✅</div>
-    <h2 style="font-size:2rem; color:#2c3e50; margin:0;">Bericht begrepen</h2>
+<div class="panel">
+    <div class="panel__icon">✅</div>
+    <h2 class="panel__title">Bericht begrepen</h2>
 
     <?php if (!empty($sentence)): ?>
-        <div style="background:#eafaf1; border:2px solid #27ae60; border-radius:16px;
-                    padding:16px 28px; font-size:1.5rem; color:#1e8449; max-width:480px; line-height:1.4;">
-            <?= htmlspecialchars($sentence) ?>
-        </div>
+        <div class="panel__message"><?= htmlspecialchars($sentence) ?></div>
     <?php endif; ?>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; width:100%; max-width:420px;">
-        <a href="<?= BASE_URL ?>?action=session_start"
-           class="card card--end" style="padding:24px; border-radius:20px; min-height:120px;">
-            <span style="font-size:2rem;">🔄</span>
-            <span style="font-size:1.3rem; margin-top:10px;">Nieuw gesprek</span>
+    <div class="panel__actions">
+        <a href="<?= BASE_URL ?>?action=session_start" class="card card--leaf" style="min-height:120px;">
+            <span class="card__icon">🔄</span>
+            <span class="card__label">Nieuw gesprek</span>
         </a>
-        <a href="<?= BASE_URL ?>"
-           class="card" style="padding:24px; border-radius:20px; min-height:120px;">
-            <span style="font-size:2rem;">🏠</span>
-            <span style="font-size:1.3rem; margin-top:10px;">Home</span>
+        <a href="<?= BASE_URL ?>" class="card" style="min-height:120px;">
+            <span class="card__icon">🏠</span>
+            <span class="card__label">Home</span>
         </a>
     </div>
-
 </div>

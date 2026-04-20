@@ -8,18 +8,6 @@ use App\Domain\Content\TreeRepository;
 use App\Domain\Content\ProfileRepository;
 use App\Domain\Session\Session;
 
-class OptionsResult
-{
-    private function __construct(
-        public readonly bool   $isPending,
-        public readonly array  $options,
-        public readonly ?int   $jobId,
-    ) {}
-
-    public static function immediate(array $options): self { return new self(false, $options, null); }
-    public static function pending(int $jobId): self       { return new self(true,  [],      $jobId); }
-}
-
 class IntentEngine
 {
     public function __construct(

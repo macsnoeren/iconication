@@ -5,12 +5,11 @@ namespace App\Domain\Session;
 
 use App\Domain\Intent\OptionsResult;
 
-class SelectResult
+class RestoreResult
 {
     public function __construct(
+        public readonly Session       $session,
         public readonly OptionsResult $options,
         public readonly string        $sentence,
-        public readonly string        $newState,
-        public readonly ?string       $suggestedMessage,
     ) {}
 }
