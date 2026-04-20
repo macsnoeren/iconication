@@ -221,21 +221,28 @@ $treeId = (int)$tree['id'];
             <button type="button" class="img-pick-btn" onclick="openPicker('<?= $inputId ?>')">🖼</button>
         </div>
 
-        <div class="opt-leaf-row">
-            <input type="checkbox" id="leaf_<?= $nodeId ?>"
-                   name="nodes[<?= $nodeId ?>][is_leaf]" value="1"
-                   <?= $isLeaf ? 'checked' : '' ?>
-                   onchange="toggleSuggested(<?= $nodeId ?>, this.checked)">
-            <label for="leaf_<?= $nodeId ?>">★ Eindpunt (geen volgende node)</label>
-        </div>
-
-        <input type="text"
-               id="suggested_<?= $nodeId ?>"
-               name="nodes[<?= $nodeId ?>][suggested_message]"
-               class="opt-suggested"
-               value="<?= htmlspecialchars($node['suggested_message'] ?? '') ?>"
-               placeholder="Volledige bevestigingszin..."
-               style="<?= $isLeaf ? '' : 'display:none;' ?>">
+        <?php $hasChildren = isset($groups[$nodeId]); ?>
+        <?php if ($hasChildren): ?>
+            <div class="opt-leaf-row" style="color:var(--color-accent); font-weight:600;">
+                → Heeft vervolgopties
+            </div>
+            <input type="hidden" name="nodes[<?= $nodeId ?>][is_leaf]" value="0">
+        <?php else: ?>
+            <div class="opt-leaf-row">
+                <input type="checkbox" id="leaf_<?= $nodeId ?>"
+                       name="nodes[<?= $nodeId ?>][is_leaf]" value="1"
+                       <?= $isLeaf ? 'checked' : '' ?>
+                       onchange="toggleSuggested(<?= $nodeId ?>, this.checked)">
+                <label for="leaf_<?= $nodeId ?>">★ Eindpunt (geen volgende node)</label>
+            </div>
+            <input type="text"
+                   id="suggested_<?= $nodeId ?>"
+                   name="nodes[<?= $nodeId ?>][suggested_message]"
+                   class="opt-suggested"
+                   value="<?= htmlspecialchars($node['suggested_message'] ?? '') ?>"
+                   placeholder="Volledige bevestigingszin..."
+                   style="<?= $isLeaf ? '' : 'display:none;' ?>">
+        <?php endif; ?>
     </div>
     <?php endforeach; ?>
 </div>

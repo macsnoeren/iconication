@@ -123,18 +123,30 @@ class TreeRepository
         $ids = [];
 
         foreach ($options as $i => $opt) {
+            $label    = $opt['label'];
+            $imageUrl = $opt['image_url'] ?? null;
+
+            // Gebruik bestaand plaatje als AI er geen heeft gevonden
+            if (!$imageUrl) {
+                $imageUrl = $this->lookupImageForLabel($label);
+            }
+
             $db->prepare(
                 "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
             )->execute([
                 $treeId, $parentId, $depth,
-                $opt['label'],
-                $opt['image_url'] ?? null,
+                $label, $imageUrl,
                 $opt['is_leaf']   ?? 0,
                 $opt['suggested_message'] ?? null,
                 $i,
             ]);
             $ids[] = (int)$db->lastInsertId();
+
+            // Propageer een nieuw plaatje naar alle bestaande nodes met hetzelfde label
+            if ($imageUrl) {
+                $this->syncImageForLabel($label, $imageUrl);
+            }
         }
 
         // "Iets anders" als vaste laatste node zodat de boom volledig doorloopbaar blijft.
@@ -144,5 +156,26 @@ class TreeRepository
         )->execute([$treeId, $parentId, $depth, count($options)]);
 
         return $ids;
+    }
+
+    // Zet hetzelfde plaatje op alle nodes met dit label (case-insensitief).
+    public function syncImageForLabel(string $label, string $imageUrl): void
+    {
+        Database::getConnection()->prepare(
+            "UPDATE tree_nodes SET image_url = ?
+             WHERE LOWER(label) = LOWER(?) AND (image_url IS NULL OR image_url = '' OR image_url != ?)"
+        )->execute([$imageUrl, $label, $imageUrl]);
+    }
+
+    // Zoek een bestaand plaatje voor dit label in de hele database.
+    public function lookupImageForLabel(string $label): ?string
+    {
+        $stmt = Database::getConnection()->prepare(
+            "SELECT image_url FROM tree_nodes
+             WHERE LOWER(label) = LOWER(?) AND image_url IS NOT NULL AND image_url != ''
+             LIMIT 1"
+        );
+        $stmt->execute([$label]);
+        return $stmt->fetchColumn() ?: null;
     }
 }

@@ -41,12 +41,19 @@ class IntentEngine
 
     private function scoreAndSort(array $candidates, Session $session): array
     {
-        foreach ($candidates as &$node) {
+        // Houd "Iets anders" buiten de sortering zodat het altijd als laatste staat
+        // en nooit wegvalt door de limiet.
+        $andere  = array_values(array_filter($candidates, fn($n) => $n['label'] === 'Iets anders'));
+        $regular = array_values(array_filter($candidates, fn($n) => $n['label'] !== 'Iets anders'));
+
+        foreach ($regular as &$node) {
             $node['score'] = $this->score($node, $session);
         }
         unset($node);
-        usort($candidates, fn($a, $b) => $b['score'] <=> $a['score']);
-        return array_slice($candidates, 0, $this->limitForProfile($session->profileId));
+        usort($regular, fn($a, $b) => $b['score'] <=> $a['score']);
+        $regular = array_slice($regular, 0, $this->limitForProfile($session->profileId));
+
+        return array_merge($regular, $andere);
     }
 
     private function score(array $node, Session $session): float

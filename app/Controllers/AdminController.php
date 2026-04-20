@@ -602,6 +602,7 @@ class AdminController {
     // Sla alle bewerkte nodes van één boom tegelijk op (inline editor).
     public function saveTreeNodes(int $treeId): void
     {
+        $repo = new \App\Domain\Content\TreeRepository();
         foreach ($_POST['nodes'] ?? [] as $nodeId => $data) {
             $nodeId    = (int)$nodeId;
             $label     = mb_substr(trim($data['label'] ?? ''), 0, 100);
@@ -612,6 +613,9 @@ class AdminController {
             $this->db->prepare(
                 "UPDATE tree_nodes SET label=?, image_url=?, is_leaf=?, suggested_message=? WHERE id=? AND tree_id=?"
             )->execute([$label, $imageUrl ?: null, $isLeaf, $suggested ?: null, $nodeId, $treeId]);
+            if ($imageUrl) {
+                $repo->syncImageForLabel($label, $imageUrl);
+            }
         }
         header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId#saved");
         exit;
@@ -645,6 +649,10 @@ class AdminController {
         $this->db->prepare(
             "UPDATE tree_nodes SET label = ?, image_url = ?, suggested_message = ?, is_leaf = ? WHERE id = ?"
         )->execute([$label, $imageUrl, $suggestedMessage ?: null, $isLeaf, $nodeId]);
+
+        if ($imageUrl) {
+            (new \App\Domain\Content\TreeRepository())->syncImageForLabel($label, $imageUrl);
+        }
 
         header("Location: " . BASE_URL . "?action=admin_tree_nodes&tree=$treeId");
         exit;
