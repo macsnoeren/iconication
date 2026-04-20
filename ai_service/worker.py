@@ -429,6 +429,36 @@ def run_tune(cfg: configparser.ConfigParser, php_url: str, api_key: str) -> None
 
 # ─── Dynamische opties generatie ─────────────────────────────────────────────
 
+DYNAMIC_OPTIONS_PROMPT_START = """Je bent een AAC-communicatiespecialist. Een niet-verbale gebruiker wil iets zeggen maar dit is het BEGIN van het gesprek — er is nog geen context.
+
+Jouw taak bij het BEGIN van een gesprek:
+Vraag ALTIJD eerst naar de BASISBEHOEFTE van de gebruiker. Geef PRECIES 3 brede categorieën die de meest voorkomende behoeften van AAC-gebruikers dekken. Denk aan: lichamelijk ongemak, eten/drinken, activiteit, gevoel, persoon.
+
+VERPLICHTE categorieën bij het begin (kies de 3 meest relevante):
+- "Ik heb pijn" (lichaam, pijn, ongemak)
+- "Ik wil eten of drinken" (honger, dorst)
+- "Ik wil iets doen" (activiteit, uitje)
+- "Ik voel me ergens over" (gevoel, emotie)
+- "Ik wil iets met iemand" (persoon, contact, bezoek)
+- "Ik heb iets nodig" (toilet, slaap, medicijn, hulp)
+
+Regels:
+- is_complete: altijd FALSE bij het begin
+- Labels: max 4 woorden, concreet
+- image_hint: 1-2 woorden voor ARASAAC
+
+Geef ALLEEN valide JSON:
+{{
+  "is_complete": false,
+  "sentence_so_far": "",
+  "options": [
+    {{"label": "Ik heb pijn", "image_hint": "pijn lichaam"}},
+    {{"label": "Ik wil eten of drinken", "image_hint": "eten drinken"}},
+    {{"label": "Ik wil iets doen", "image_hint": "activiteit doen"}}
+  ]
+}}"""
+
+
 DYNAMIC_OPTIONS_PROMPT = """Je bent een AAC-communicatiespecialist. Een niet-verbale gebruiker probeert iets te zeggen.
 
 Selectiegeschiedenis (wat de gebruiker tot nu toe koos):
@@ -445,33 +475,33 @@ Jouw taak:
    - Optie 3: een minder voor de hand liggende maar relevante optie
 3. Vermijd vage of generieke opties zoals "Iets anders doen" of "Meer opties".
 4. Geef NOOIT opties die al in de "Al eerder getoonde opties" lijst staan.
-4. Als de intentie al duidelijk genoeg is: geef concrete eindopties met een volledige zin.
-5. Geef altijd ook een `sentence_so_far`: de best mogelijke zin die de gebruiker nu al zou kunnen zeggen, ook als nog niet compleet.
+5. Als de intentie al duidelijk genoeg is: geef concrete eindopties met een volledige zin.
+6. Geef altijd ook een `sentence_so_far`: de best mogelijke zin die de gebruiker nu al zou kunnen zeggen, ook als nog niet compleet.
 
 Regels voor opties:
 - Labels: max 4 woorden, concreet en specifiek (bv. "Bioscoop bezoeken", niet "Uit gaan")
 - image_hint: 1-2 woorden voor een ARASAAC pictogram
 - Als `is_complete` true: geef `suggested_message` met volledige, natuurlijke zin
 
-Voorbeeld (intentie nog onduidelijk):
+Voorbeeld (intentie nog onduidelijk, gebruiker koos "Ik heb pijn"):
 {{
   "is_complete": false,
-  "sentence_so_far": "Ik wil iets gaan doen",
+  "sentence_so_far": "Ik heb pijn",
   "options": [
-    {{"label": "Naar de bioscoop", "image_hint": "bioscoop film"}},
-    {{"label": "Naar het park", "image_hint": "park buiten"}},
-    {{"label": "Naar een restaurant", "image_hint": "restaurant eten"}}
+    {{"label": "Pijn in mijn hoofd", "image_hint": "hoofdpijn"}},
+    {{"label": "Pijn in mijn buik", "image_hint": "buikpijn"}},
+    {{"label": "Pijn in mijn been", "image_hint": "been pijn"}}
   ]
 }}
 
-Voorbeeld (intentie duidelijk — bioscoop):
+Voorbeeld (intentie duidelijk):
 {{
   "is_complete": true,
-  "sentence_so_far": "Ik wil graag naar de bioscoop gaan",
+  "sentence_so_far": "Ik heb pijn in mijn hoofd",
   "options": [
-    {{"label": "Vanavond", "image_hint": "avond", "suggested_message": "Ik wil graag vanavond naar de bioscoop gaan"}},
-    {{"label": "Dit weekend", "image_hint": "weekend", "suggested_message": "Ik wil graag dit weekend naar de bioscoop gaan"}},
-    {{"label": "Met iemand mee", "image_hint": "samen vriend", "suggested_message": "Ik wil graag samen naar de bioscoop gaan"}}
+    {{"label": "Al een tijdje", "image_hint": "tijd lang", "suggested_message": "Ik heb al een tijdje hoofdpijn"}},
+    {{"label": "Net begonnen", "image_hint": "nu net", "suggested_message": "Ik heb net hoofdpijn gekregen"}},
+    {{"label": "Heel erg", "image_hint": "erg pijn", "suggested_message": "Ik heb heel erge hoofdpijn"}}
   ]
 }}
 
@@ -480,14 +510,13 @@ Geef ALLEEN valide JSON terug, geen extra tekst."""
 
 def generate_dynamic_options(cfg: configparser.ConfigParser, history: list,
                              shown_options: list = None) -> dict:
-    if history:
-        history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(history))
+    if not history:
+        prompt = DYNAMIC_OPTIONS_PROMPT_START
     else:
-        history_text = "  (dit is het begin van het gesprek)"
-
-    shown = shown_options or []
-    shown_text = "\n".join(f"  - {label}" for label in shown) if shown else "  (nog geen opties getoond)"
-    prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text)
+        history_text = "\n".join(f"  {i+1}. {label}" for i, label in enumerate(history))
+        shown = shown_options or []
+        shown_text = "\n".join(f"  - {label}" for label in shown) if shown else "  (nog geen opties getoond)"
+        prompt = DYNAMIC_OPTIONS_PROMPT.format(history_text=history_text, shown_text=shown_text)
     ollama_url = get(cfg, "ai", "ollama_url", "http://localhost:11434/api/generate")
     model      = active_model(cfg)
 
