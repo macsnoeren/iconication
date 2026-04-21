@@ -88,6 +88,22 @@ class SessionManager
         return $this->back($sessionId);
     }
 
+    public function anders(string $sessionId): \App\Domain\Intent\OptionsResult
+    {
+        $session = $this->load($sessionId);
+        $this->logEvent($sessionId, 'ANDERS');
+
+        // Huidige parent = de laatste geselecteerde node (of null voor root)
+        $selects  = $this->getSelectHistory($sessionId);
+        $parentId = empty($selects) ? null : (int)end($selects)['node_id'];
+
+        // Verwijder de huidige iconen op dit niveau zodat er nieuwe gegenereerd worden
+        $this->trees->deleteChildNodes($session->treeId, $parentId);
+
+        // Vraag AI om andere iconen in dezelfde richting
+        return $this->intent->getNextOptions($session, $parentId, true);
+    }
+
     public function restore(string $sessionId): ?RestoreResult
     {
         $session = $this->load($sessionId);

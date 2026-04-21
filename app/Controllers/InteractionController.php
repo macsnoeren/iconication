@@ -98,6 +98,28 @@ class InteractionController
         }
     }
 
+    // ── Anders: andere iconen in dezelfde richting ────────────────────────────
+    public function anders(): void
+    {
+        $sessionId = $_SESSION['session_id'] ?? null;
+        if (!$sessionId) { $this->redirectHome(); return; }
+
+        $result = $this->sessions->anders($sessionId);
+
+        if ($result->isPending) {
+            $sentence = $this->sessions->getSentence($sessionId);
+            $this->render('session_waiting', [
+                'jobId'    => $result->jobId,
+                'sentence' => $sentence,
+                'view'     => 'session_waiting',
+            ]);
+            return;
+        }
+
+        $sentence = $this->sessions->getSentence($sessionId);
+        $this->renderSession($sessionId, $result->options, $sentence);
+    }
+
     // ── Stap terug ────────────────────────────────────────────────────────────
     public function back(): void
     {
@@ -197,6 +219,13 @@ class InteractionController
             $currentState = $data['current_state'] ?? [];
             $result       = $this->sessions->applyDynamicResult($sessionId, $aiOptions, $currentState);
             $sentence     = $sentenceSoFar ?: $result->sentence;
+
+            // Sla sentence_so_far op in meta voor persistentie
+            if ($sentenceSoFar) {
+                $meta = $this->sessions->getSessionMeta($sessionId);
+                $meta['sentence_so_far'] = $sentenceSoFar;
+                $this->sessions->setSessionMeta($sessionId, $meta);
+            }
 
             if ($hasGuess && $guessSentence) {
                 $_SESSION['pending_guess']    = $guessSentence;
@@ -350,6 +379,10 @@ class InteractionController
 
     private function renderSession(string $sessionId, array $options, string $sentence): void
     {
+        if (!$sentence) {
+            $meta     = $this->sessions->getSessionMeta($sessionId);
+            $sentence = $meta['sentence_so_far'] ?? '';
+        }
         $this->render('session', [
             'sessionId' => $sessionId,
             'options'   => $options,

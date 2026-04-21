@@ -16,7 +16,7 @@ class IntentEngine
         private ProfileRepository $profiles,
     ) {}
 
-    public function getNextOptions(Session $session, ?int $parentNodeId): OptionsResult
+    public function getNextOptions(Session $session, ?int $parentNodeId, bool $ietsAnders = false): OptionsResult
     {
         $mode = $this->trees->getGenerationMode($session->treeId);
 
@@ -26,7 +26,7 @@ class IntentEngine
             if (!empty($existing)) {
                 return OptionsResult::immediate($this->scoreAndSort($existing, $session));
             }
-            $jobId = $this->queueDynamicOptions($session, $parentNodeId);
+            $jobId = $this->queueDynamicOptions($session, $parentNodeId, $ietsAnders);
             return OptionsResult::pending($jobId);
         }
 
@@ -41,19 +41,14 @@ class IntentEngine
 
     private function scoreAndSort(array $candidates, Session $session): array
     {
-        // Houd "Iets anders" buiten de sortering zodat het altijd als laatste staat
-        // en nooit wegvalt door de limiet.
-        $andere  = array_values(array_filter($candidates, fn($n) => $n['label'] === 'Iets anders'));
-        $regular = array_values(array_filter($candidates, fn($n) => $n['label'] !== 'Iets anders'));
-
-        foreach ($regular as &$node) {
+            foreach ($candidates as &$node) {
             $node['score'] = $this->score($node, $session);
         }
         unset($node);
-        usort($regular, fn($a, $b) => $b['score'] <=> $a['score']);
-        $regular = array_slice($regular, 0, $this->limitForProfile($session->profileId));
+        usort($candidates, fn($a, $b) => $b['score'] <=> $a['score']);
+        $candidates = array_slice($candidates, 0, $this->limitForProfile($session->profileId));
 
-        return array_merge($regular, $andere);
+        return $candidates;
     }
 
     private function score(array $node, Session $session): float
@@ -89,7 +84,7 @@ class IntentEngine
         };
     }
 
-    private function queueDynamicOptions(Session $session, ?int $parentNodeId): int
+    private function queueDynamicOptions(Session $session, ?int $parentNodeId, bool $ietsAnders = false): int
     {
         $db = Database::getConnection();
 
@@ -132,6 +127,7 @@ class IntentEngine
             'current_state'  => $currentState,
             'profile_id'     => $session->profileId,
             'language'       => 'nl',
+            'iets_anders'    => $ietsAnders,
         ]);
 
         $db->prepare(

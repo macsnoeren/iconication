@@ -116,7 +116,6 @@ class TreeRepository
     }
 
     // Sla door AI gegenereerde nodes op voor een dynamische sessie-stap.
-    // Voegt ook altijd een "Iets anders" sibling toe zodat de boom intact blijft.
     public function insertDynamicNodes(int $treeId, ?int $parentId, int $depth, array $options): array
     {
         $db  = Database::getConnection();
@@ -151,13 +150,17 @@ class TreeRepository
             }
         }
 
-        // "Iets anders" als vaste laatste node zodat de boom volledig doorloopbaar blijft.
-        $db->prepare(
-            "INSERT INTO tree_nodes (tree_id, parent_id, depth, label, image_url, is_leaf, suggested_message, sort_order)
-             VALUES (?, ?, ?, 'Iets anders', NULL, 0, NULL, ?)"
-        )->execute([$treeId, $parentId, $depth, count($options)]);
-
         return $ids;
+    }
+
+    public function deleteChildNodes(int $treeId, ?int $parentId): void
+    {
+        $db = Database::getConnection();
+        if ($parentId === null) {
+            $db->prepare("DELETE FROM tree_nodes WHERE tree_id = ? AND parent_id IS NULL")->execute([$treeId]);
+        } else {
+            $db->prepare("DELETE FROM tree_nodes WHERE tree_id = ? AND parent_id = ?")->execute([$treeId, $parentId]);
+        }
     }
 
     // Zet hetzelfde plaatje op alle nodes met dit label (case-insensitief).

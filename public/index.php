@@ -125,5 +125,6 @@ match($action) {
     'session_guess_confirm'   => $interaction->confirmGuess(),
     'session_guess_reject'    => $interaction->rejectGuess(),
     'session_show'            => $interaction->show(),
+    'session_anders'          => $interaction->anders(),
     default                  => $interaction->restore(),
 };

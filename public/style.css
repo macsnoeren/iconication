@@ -223,6 +223,28 @@ body.fullscreen .container {
     color: var(--color-accent);
 }
 
+/* ── Guess bar ─────────────────────────────────────────────────────────────── */
+.guess-bar {
+    background: var(--color-accent);
+    color: #fff;
+    border-radius: 12px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.guess-bar__label {
+    font-size: .8rem;
+    opacity: .85;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.guess-bar__text {
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
 /* ── Sentence bar ──────────────────────────────────────────────────────────── */
 .sentence-bar {
     text-align: center;
