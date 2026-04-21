@@ -9,6 +9,10 @@
         </div>
     <?php endif; ?>
 
+    <!-- Aparte form voor "Iets anders" — mag niet genest zijn in sel-form -->
+    <form id="anders-form" method="POST"
+          action="<?= BASE_URL ?>?action=session_anders" style="display:none;"></form>
+
     <form method="POST" action="<?= BASE_URL ?>?action=session_select" id="sel-form"
           style="flex:1; min-height:0; display:flex; flex-direction:column;">
         <input type="hidden" name="node_id" id="node-input" value="">
@@ -30,12 +34,10 @@
                 </button>
             <?php endforeach; ?>
 
-            <form method="POST" action="<?= BASE_URL ?>?action=session_anders" style="display:contents;">
-                <button type="submit" class="card card--andere">
-                    <span class="card__icon">🔄</span>
-                    <span class="card__label">Iets anders</span>
-                </button>
-            </form>
+            <button type="submit" form="anders-form" class="card card--andere">
+                <span class="card__icon">🔄</span>
+                <span class="card__label">Iets anders</span>
+            </button>
         </div>
     </form>
 
