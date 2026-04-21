@@ -454,35 +454,34 @@ def run_tune(cfg: configparser.ConfigParser, php_url: str, api_key: str) -> None
 
 # ─── Dynamische opties generatie ─────────────────────────────────────────────
 
-AAC_GUESS_PROMPT_START = """Je bent een AI component binnen een AAC (Augmentative and Alternative Communication) systeem.
+AAC_GUESS_PROMPT_START = """Je bent een AI component binnen een AAC systeem.
+Je speelt een raadspelletje: je probeert te raden wat de gebruiker wil zeggen.
 
-Dit is het BEGIN van het gesprek. Er is nog geen context.
+Dit is het BEGIN van het gesprek. Genereer 3 brede basiscategorieën.
 
-Jouw taak: genereer de eerste 4 opties om stap voor stap te achterhalen wat de gebruiker wil zeggen.
-Begin BREED met basiscategorieën voor de meest voorkomende behoeften van AAC-gebruikers.
+REGELS:
+- PRECIES 3 opties (geen Iets anders — dat is een vaste UI-knop)
+- Brede basiscategorieën: pijn/lichaam, eten/drinken, gevoel, activiteit, persoon, hulp
+- Labels: 1-3 woorden, concreet en visueel
 
-HARDE REGELS:
-- PRECIES 4 opties, niet meer, niet minder
-- Optie 1, 2, 3: brede basiscategorieën (pijn/lichaam, eten/drinken, gevoel, activiteit, persoon, hulp)
-- Optie 4: ALTIJD exact label "Iets anders" met image_query "anders"
-- Labels: maximaal 1-3 woorden, concreet en visueel voorstelbaar
-
-Geef ALLEEN valide JSON:
-{{
+OUTPUT (STRICT JSON):
+{
   "options": [
-    {{"id": "option_1", "label": "Pijn", "image_query": "pijn lichaam"}},
-    {{"id": "option_2", "label": "Eten of drinken", "image_query": "eten drinken"}},
-    {{"id": "option_3", "label": "Iets doen", "image_query": "activiteit doen"}},
-    {{"id": "other",    "label": "Iets anders", "image_query": "anders"}}
+    {"id": "option_1", "label": "Pijn", "image_query": "pijn lichaam"},
+    {"id": "option_2", "label": "Eten of drinken", "image_query": "eten drinken"},
+    {"id": "option_3", "label": "Iets doen", "image_query": "activiteit doen"}
   ],
-  "reasoning": "Brede startcategorieën voor AAC",
-  "is_complete": false,
+  "has_guess": false,
+  "guess_sentence": "",
+  "reasoning": "Brede startcategorieën",
   "sentence_so_far": "",
-  "current_state": {{"hypothesis": "onbekend", "confidence": 0.0}}
-}}"""
+  "current_state": {"hypothesis": "onbekend", "confidence": 0.0}
+}
+
+Geef ALLEEN valide JSON terug."""
 
 
-AAC_GUESS_PROMPT = """Je bent een AI component binnen een AAC (Augmentative and Alternative Communication) systeem.
+AAC_GUESS_PROMPT = """Je bent een AI component binnen een AAC systeem.
 Je speelt een raadspelletje: je probeert te raden wat de gebruiker wil zeggen.
 
 Selectiegeschiedenis (wat de gebruiker tot nu toe koos):
@@ -496,34 +495,24 @@ Al getoonde opties (NOOIT herhalen):
 
 {andere_note}
 
-TAAK:
-Genereer PRECIES 4 opties EN beslis of je al een goede gok durft te doen.
+TAAK: Genereer PRECIES 3 opties om de intentie te verfijnen.
 
-HARDE REGELS voor de 4 opties:
-- PRECIES 4 opties, niet meer, niet minder
-- Optie 1, 2, 3: concreet, visueel, 1-2 woorden, duidelijk van elkaar verschillend
-- Optie 4: ALTIJD exact label "Iets anders" met image_query "anders"
-- VERBODEN: abstracte termen, medische diagnoses, lange zinnen, synoniemen die te veel op elkaar lijken
+REGELS:
+- PRECIES 3 opties — GEEN "Iets anders" (dat is een vaste UI-knop)
+- Concreet, visueel, 1-2 woorden, duidelijk van elkaar verschillend
+- VERBODEN: abstracte termen, medische diagnoses, synoniemen die te veel op elkaar lijken
 - Herhaal NOOIT opties uit "Al getoonde opties"
 
-RAAD-LOGICA (has_guess):
-- Als je voldoende zeker bent (confidence >= 0.75): zet has_guess op true
-- Schrijf dan een guess_sentence: een korte, natuurlijke volledige zin die de gebruiker wil zeggen
-  (bijv. "Ik heb hoofdpijn" of "Ik wil graag een broodje eten")
-- De 4 opties blijven altijd aanwezig als fallback voor als de gok fout is
-- Na 2-3 keuzes mag je al gokken als het duidelijk is
-
-GEDRAG:
-- Begin breed, word specifieker na elke keuze
-- Doel: zo snel mogelijk een goede gok doen
+RAAD-LOGICA:
+- confidence >= 0.75 → has_guess: true, schrijf guess_sentence (volledige natuurlijke zin)
+- Na 2-3 keuzes mag je al gokken als het duidelijk genoeg is
 
 OUTPUT (STRICT JSON):
 {{
   "options": [
     {{"id": "option_1", "label": "...", "image_query": "..."}},
     {{"id": "option_2", "label": "...", "image_query": "..."}},
-    {{"id": "option_3", "label": "...", "image_query": "..."}},
-    {{"id": "other",    "label": "Iets anders", "image_query": "anders"}}
+    {{"id": "option_3", "label": "...", "image_query": "..."}}
   ],
   "has_guess": false,
   "guess_sentence": "",
@@ -532,18 +521,25 @@ OUTPUT (STRICT JSON):
   "current_state": {{"hypothesis": "...", "confidence": 0.0}}
 }}
 
-Geef ALLEEN valide JSON terug, geen extra tekst."""
+Geef ALLEEN valide JSON terug."""
 
 
 def generate_dynamic_options(cfg: configparser.ConfigParser, history: list,
                              shown_options: list = None,
-                             current_state: dict = None) -> dict:
+                             current_state: dict = None,
+                             iets_anders: bool = False) -> dict:
     if not history:
         prompt = AAC_GUESS_PROMPT_START
     else:
         effective_history = list(history)
         andere_note = ""
-        if effective_history and effective_history[-1].lower() in ("iets anders", "something else"):
+        if iets_anders:
+            andere_note = (
+                "LET OP: De gebruiker koos 'Iets anders' — de getoonde iconen waren in de JUISTE richting "
+                "maar geen ervan was het exacte pictogram. Toon ANDERE iconen die nog steeds bij dezelfde "
+                "richting passen. Herhaal NOOIT opties uit 'Al getoonde opties'."
+            )
+        elif effective_history and effective_history[-1].lower() in ("iets anders", "something else"):
             effective_history.pop()
             andere_note = (
                 "LET OP: De gebruiker koos 'Iets anders' — de vorige opties pasten niet. "
@@ -583,15 +579,12 @@ def _parse_dynamic_options(content: str) -> dict:
     data    = json.loads(match.group())
     options = data.get("options", [])
 
-    if len(options) < 2:
+    if len(options) < 1:
         raise ValueError(f"Te weinig opties in respons: {len(options)}")
 
-    # Zet "Iets anders" altijd als laatste optie
-    andere  = [o for o in options if o.get("label", "").strip().lower() == "iets anders"]
-    regular = [o for o in options if o.get("label", "").strip().lower() != "iets anders"]
-    if not andere:
-        andere = [{"id": "other", "label": "Iets anders", "image_query": "anders"}]
-    options = regular[:3] + andere[:1]
+    # Neem de eerste 3 opties (zonder "Iets anders" — dat is een vaste UI-knop)
+    options = [o for o in options if o.get("label", "").strip().lower() != "iets anders"]
+    options = options[:3]
 
     has_guess     = bool(data.get("has_guess", data.get("is_complete", False)))
     guess_sentence = data.get("guess_sentence", "").strip()
@@ -631,12 +624,14 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
                 shown_options = params.get("shown_options", [])
                 current_state = params.get("current_state") or None
                 language      = params.get("language", language)
+                iets_anders   = bool(params.get("iets_anders", False))
             else:
                 raw_state     = json.loads(state_json) if state_json.strip() and state_json.strip() != "null" else {}
                 history       = raw_state.get("history", [])
                 shown_options = []
                 current_state = None
-            result = generate_dynamic_options(cfg, history, shown_options, current_state)
+                iets_anders   = False
+            result = generate_dynamic_options(cfg, history, shown_options, current_state, iets_anders)
             for opt in result["options"]:
                 if not opt.get("image_url"):
                     # Gebruik image_query (nieuw formaat) of image_hint (oud formaat) als fallback
