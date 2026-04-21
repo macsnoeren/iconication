@@ -94,6 +94,45 @@ class AdminController {
         exit;
     }
 
+    // ── Vocabulaire beheer ────────────────────────────────────────────────────
+
+    public function showVocabulary(): void
+    {
+        $vocab = $this->db->query(
+            "SELECT * FROM aac_vocabulary ORDER BY is_approved DESC, label ASC"
+        )->fetchAll();
+        $view = 'admin_vocabulary';
+        include __DIR__ . '/../../views/layout.php';
+    }
+
+    public function saveVocabulary(): void
+    {
+        foreach ($_POST['vocab'] ?? [] as $id => $data) {
+            $id         = (int)$id;
+            $imageUrl   = mb_substr(trim($data['image_url'] ?? ''), 0, 500);
+            $isApproved = isset($data['is_approved']) ? 1 : 0;
+            $this->db->prepare(
+                "UPDATE aac_vocabulary SET image_url = ?, is_approved = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = ?"
+            )->execute([$imageUrl ?: null, $isApproved, $id]);
+            // Goedgekeurd plaatje doorpropageren naar alle nodes met dit label
+            if ($isApproved && $imageUrl) {
+                (new \App\Domain\Content\TreeRepository())->syncImageForLabel(
+                    $data['label'] ?? '', $imageUrl
+                );
+            }
+        }
+        header("Location: " . BASE_URL . "?action=admin_vocabulary#saved");
+        exit;
+    }
+
+    public function deleteVocabularyItem(int $id): void
+    {
+        $this->db->prepare("DELETE FROM aac_vocabulary WHERE id = ?")->execute([$id]);
+        header("Location: " . BASE_URL . "?action=admin_vocabulary");
+        exit;
+    }
+
     public function renameTree(): void
     {
         $treeId = (int)($_POST['tree_id'] ?? 0);

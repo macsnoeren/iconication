@@ -103,7 +103,7 @@ class SessionManager
 
     // Verwerkt het resultaat van een dynamic_options AI-job en slaat de
     // gegenereerde nodes op zodat de sessie verder kan.
-    public function applyDynamicResult(string $sessionId, array $aiOptions): SelectResult
+    public function applyDynamicResult(string $sessionId, array $aiOptions, array $currentState = []): SelectResult
     {
         $session  = $this->load($sessionId);
         $selects  = $this->getSelectHistory($sessionId);
@@ -114,9 +114,13 @@ class SessionManager
 
         $rawNodes = $this->trees->getChildren($session->treeId, $parentId);
 
-        // Sla op welke labels de gebruiker heeft gezien zodat toekomstige AI-jobs
-        // deze kunnen vermijden.
         $this->logShownOptions($sessionId, $rawNodes);
+
+        if (!empty($currentState)) {
+            $meta = $this->getSessionMeta($sessionId);
+            $meta['current_state'] = $currentState;
+            $this->setSessionMeta($sessionId, $meta);
+        }
 
         return new SelectResult(
             options:          \App\Domain\Intent\OptionsResult::immediate($rawNodes),
@@ -134,6 +138,21 @@ class SessionManager
     public function setConfirming(string $sessionId): void
     {
         $this->updateState($sessionId, 'CONFIRMING');
+    }
+
+    public function getSessionMeta(string $sessionId): array
+    {
+        $stmt = Database::getConnection()->prepare("SELECT meta_json FROM sessions WHERE id = ?");
+        $stmt->execute([$sessionId]);
+        $row = $stmt->fetch();
+        return $row && $row['meta_json'] ? (json_decode($row['meta_json'], true) ?? []) : [];
+    }
+
+    public function setSessionMeta(string $sessionId, array $meta): void
+    {
+        Database::getConnection()->prepare(
+            "UPDATE sessions SET meta_json = ? WHERE id = ?"
+        )->execute([json_encode($meta), $sessionId]);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

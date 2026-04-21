@@ -93,20 +93,35 @@ class IntentEngine
     {
         $db = Database::getConnection();
 
-        // Selectiegeschiedenis
+        // Reconstrueer effectieve history door SELECT/BACK events te replayen
+        // zodat teruggedraaide keuzes niet in de AI-context verschijnen.
         $stmt = $db->prepare(
-            "SELECT label FROM session_events
-             WHERE session_id = ? AND event_type = 'SELECT' ORDER BY ts ASC"
+            "SELECT event_type, label FROM session_events
+             WHERE session_id = ? AND event_type IN ('SELECT','BACK') ORDER BY ts ASC"
         );
         $stmt->execute([$session->id]);
-        $history = array_column($stmt->fetchAll(), 'label');
+        $history = [];
+        foreach ($stmt->fetchAll() as $ev) {
+            if ($ev['event_type'] === 'SELECT') {
+                $history[] = $ev['label'];
+            } elseif (!empty($history)) {
+                array_pop($history);
+            }
+        }
 
-        // Alle labels die al getoond zijn in deze sessie (herhaling voorkomen)
+        // Labels die al getoond zijn (herhaling voorkomen)
         $stmt2 = $db->prepare(
             "SELECT DISTINCT label FROM session_events WHERE session_id = ? AND event_type = 'SHOWN'"
         );
         $stmt2->execute([$session->id]);
         $shownOptions = array_column($stmt2->fetchAll(), 'label');
+
+        // Huidige intentie-hypothese uit session meta (voor betere AI-gissing)
+        $metaStmt = $db->prepare("SELECT meta_json FROM sessions WHERE id = ?");
+        $metaStmt->execute([$session->id]);
+        $metaRow      = $metaStmt->fetch();
+        $meta         = ($metaRow && $metaRow['meta_json']) ? (json_decode($metaRow['meta_json'], true) ?? []) : [];
+        $currentState = $meta['current_state'] ?? null;
 
         $params = json_encode([
             'session_id'     => $session->id,
@@ -114,6 +129,7 @@ class IntentEngine
             'parent_node_id' => $parentNodeId,
             'history'        => $history,
             'shown_options'  => $shownOptions,
+            'current_state'  => $currentState,
             'profile_id'     => $session->profileId,
             'language'       => 'nl',
         ]);

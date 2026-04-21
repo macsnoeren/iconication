@@ -107,7 +107,10 @@ function openRename(treeId, currentName) {
 <!-- Per-boom modus instelling -->
 <?php if (!empty($trees)): ?>
 <div class="card-admin" style="margin-bottom:20px;">
-    <div style="font-weight:700; margin-bottom:12px;">Actieve bomen</div>
+    <div style="display:flex; align-items:center; margin-bottom:12px; gap:12px;">
+        <div style="font-weight:700;">Actieve bomen</div>
+        <a href="<?= BASE_URL ?>?action=admin_vocabulary" class="btn btn--accent" style="padding:5px 14px; font-size:.82rem; margin-left:auto;">📖 Woordenschat</a>
+    </div>
     <table class="table">
         <thead>
             <tr>

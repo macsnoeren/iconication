@@ -75,6 +75,17 @@ class Database {
         try { $db->exec("ALTER TABLE option_trees ADD COLUMN generation_mode TEXT NOT NULL DEFAULT 'static'"); } catch (\Exception $e) {}
 
         try { $db->exec("ALTER TABLE tree_nodes ADD COLUMN next_node_id INTEGER NULL REFERENCES tree_nodes(id)"); } catch (\Exception $e) {}
+        try { $db->exec("ALTER TABLE sessions ADD COLUMN meta_json TEXT"); } catch (\Exception $e) {}
+
+        $db->exec("CREATE TABLE IF NOT EXISTS aac_vocabulary (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            label       TEXT    NOT NULL UNIQUE,
+            image_url   TEXT,
+            is_approved INTEGER NOT NULL DEFAULT 0,
+            created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+        $db->exec("CREATE INDEX IF NOT EXISTS idx_vocab_label ON aac_vocabulary(label COLLATE NOCASE)");
 
         $db->exec("CREATE TABLE IF NOT EXISTS tree_nodes (
             id               INTEGER PRIMARY KEY AUTOINCREMENT,

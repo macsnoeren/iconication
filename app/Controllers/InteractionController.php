@@ -184,20 +184,25 @@ class InteractionController
             $rawOptions     = $data['options'] ?? [];
             $sentenceSoFar  = trim($data['sentence_so_far'] ?? '');
 
+            $hasGuess    = (bool)($data['has_guess'] ?? $data['is_complete'] ?? false);
+            $guessSentence = trim($data['guess_sentence'] ?? $sentenceSoFar);
+
             $aiOptions = array_map(fn($opt) => [
                 'label'             => $opt['label'] ?? '',
                 'image_url'         => $opt['image_url'] ?? null,
-                'is_leaf'           => $isComplete ? 1 : 0,
-                'suggested_message' => $opt['suggested_message'] ?? null,
+                'is_leaf'           => 0,
+                'suggested_message' => null,
             ], $rawOptions);
 
-            $result   = $this->sessions->applyDynamicResult($sessionId, $aiOptions);
-            $sentence = $sentenceSoFar ?: $result->sentence;
+            $currentState = $data['current_state'] ?? [];
+            $result       = $this->sessions->applyDynamicResult($sessionId, $aiOptions, $currentState);
+            $sentence     = $sentenceSoFar ?: $result->sentence;
 
-            if ($isComplete) {
-                $this->sessions->setConfirming($sessionId);
+            if ($hasGuess && $guessSentence) {
+                $_SESSION['pending_guess']    = $guessSentence;
+                $_SESSION['pending_options']  = $result->options->options;
                 $_SESSION['pending_sentence'] = $sentence;
-                echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_dynamic_confirm']);
+                echo json_encode(['status' => 'done', 'redirect' => BASE_URL . '?action=session_guess']);
             } else {
                 $_SESSION['pending_options']  = $result->options->options;
                 $_SESSION['pending_sentence'] = $sentence;
@@ -209,7 +214,69 @@ class InteractionController
         }
     }
 
-    // ── Bevestigingsscherm na dynamic poll (is_complete=true) ────────────────
+    // ── AI-gok scherm ─────────────────────────────────────────────────────────
+    public function showGuess(): void
+    {
+        $sessionId = $_SESSION['session_id'] ?? null;
+        $guess     = $_SESSION['pending_guess']    ?? '';
+        $options   = $_SESSION['pending_options']  ?? [];
+        $sentence  = $_SESSION['pending_sentence'] ?? '';
+
+        if (!$sessionId || !$guess) { $this->redirectHome(); return; }
+
+        $this->render('session_guess', [
+            'guess'     => $guess,
+            'sentence'  => $sentence,
+            'sessionId' => $sessionId,
+            'view'      => 'session_guess',
+        ]);
+    }
+
+    // ── Gebruiker bevestigt de gok ────────────────────────────────────────────
+    public function confirmGuess(): void
+    {
+        $sessionId = $_SESSION['session_id'] ?? null;
+        $sentence  = $_POST['sentence'] ?? ($_SESSION['pending_guess'] ?? '');
+        unset($_SESSION['pending_guess'], $_SESSION['pending_options'], $_SESSION['pending_sentence']);
+
+        if ($sessionId) $this->sessions->complete($sessionId);
+        unset($_SESSION['session_id']);
+
+        $this->render('session_complete', [
+            'sentence' => $sentence,
+            'view'     => 'session_complete',
+        ]);
+    }
+
+    // ── Gebruiker verwerpt de gok → toon fallback-opties ─────────────────────
+    public function rejectGuess(): void
+    {
+        $sessionId = $_SESSION['session_id'] ?? null;
+        $options   = $_SESSION['pending_options']  ?? [];
+        $sentence  = $_SESSION['pending_sentence'] ?? '';
+        unset($_SESSION['pending_guess'], $_SESSION['pending_options'], $_SESSION['pending_sentence']);
+
+        if (!$sessionId) { $this->redirectHome(); return; }
+
+        if (empty($options)) {
+            // Geen fallback-opties: start een nieuwe AI-ronde
+            $result = $this->sessions->back($sessionId);
+            if ($result->options->isPending) {
+                $this->render('session_waiting', [
+                    'jobId'    => $result->options->jobId,
+                    'sentence' => $result->sentence,
+                    'view'     => 'session_waiting',
+                ]);
+                return;
+            }
+            $this->renderSession($sessionId, $result->options->options, $result->sentence);
+            return;
+        }
+
+        $this->renderSession($sessionId, $options, $sentence);
+    }
+
+    // ── Bevestigingsscherm na dynamic poll (legacy) ───────────────────────────
     public function dynamicConfirm(): void
     {
         $sessionId = $_SESSION['session_id'] ?? null;

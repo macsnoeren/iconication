@@ -126,9 +126,10 @@ class TreeRepository
             $label    = $opt['label'];
             $imageUrl = $opt['image_url'] ?? null;
 
-            // Gebruik bestaand plaatje als AI er geen heeft gevonden
-            if (!$imageUrl) {
-                $imageUrl = $this->lookupImageForLabel($label);
+            // Vocabulary heeft prioriteit: goedgekeurd plaatje wint altijd van AI-plaatje
+            $vocabUrl = $this->lookupImageForLabel($label);
+            if ($vocabUrl) {
+                $imageUrl = $vocabUrl;
             }
 
             $db->prepare(
@@ -143,7 +144,8 @@ class TreeRepository
             ]);
             $ids[] = (int)$db->lastInsertId();
 
-            // Propageer een nieuw plaatje naar alle bestaande nodes met hetzelfde label
+            // Sync naar vocabulary en naar andere nodes met dit label
+            $this->upsertVocabulary($label, $imageUrl);
             if ($imageUrl) {
                 $this->syncImageForLabel($label, $imageUrl);
             }
@@ -167,15 +169,58 @@ class TreeRepository
         )->execute([$imageUrl, $label, $imageUrl]);
     }
 
-    // Zoek een bestaand plaatje voor dit label in de hele database.
+    // Zoek een goedgekeurd of bekend plaatje voor dit label.
+    // Volgorde: 1) goedgekeurd in vocabulary  2) vocabulary  3) tree_nodes
     public function lookupImageForLabel(string $label): ?string
     {
-        $stmt = Database::getConnection()->prepare(
+        $db = Database::getConnection();
+
+        // 1. Goedgekeurd vocabulaire-item
+        $stmt = $db->prepare(
+            "SELECT image_url FROM aac_vocabulary
+             WHERE LOWER(label) = LOWER(?) AND is_approved = 1 AND image_url IS NOT NULL AND image_url != ''
+             LIMIT 1"
+        );
+        $stmt->execute([$label]);
+        $url = $stmt->fetchColumn();
+        if ($url) return $url;
+
+        // 2. Niet-goedgekeurd vocabulaire-item
+        $stmt = $db->prepare(
+            "SELECT image_url FROM aac_vocabulary
+             WHERE LOWER(label) = LOWER(?) AND image_url IS NOT NULL AND image_url != ''
+             LIMIT 1"
+        );
+        $stmt->execute([$label]);
+        $url = $stmt->fetchColumn();
+        if ($url) return $url;
+
+        // 3. Bestaande tree_node
+        $stmt = $db->prepare(
             "SELECT image_url FROM tree_nodes
              WHERE LOWER(label) = LOWER(?) AND image_url IS NOT NULL AND image_url != ''
              LIMIT 1"
         );
         $stmt->execute([$label]);
         return $stmt->fetchColumn() ?: null;
+    }
+
+    // Voeg een label toe aan de vocabulary (of update het plaatje als er nog geen is).
+    // Overschrijft NOOIT een goedgekeurd plaatje.
+    public function upsertVocabulary(string $label, ?string $imageUrl): void
+    {
+        if (strtolower(trim($label)) === 'iets anders') return;
+        $db = Database::getConnection();
+        $db->prepare(
+            "INSERT INTO aac_vocabulary (label, image_url)
+             VALUES (?, ?)
+             ON CONFLICT(label) DO UPDATE SET
+               image_url = CASE
+                 WHEN is_approved = 1 THEN image_url
+                 WHEN excluded.image_url IS NOT NULL AND excluded.image_url != '' THEN excluded.image_url
+                 ELSE image_url
+               END,
+               updated_at = CURRENT_TIMESTAMP"
+        )->execute([$label, $imageUrl ?: null]);
     }
 }
