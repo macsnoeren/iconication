@@ -182,24 +182,49 @@ def submit_error(php_url: str, api_key: str, job_id: int, error: str) -> None:
 
 # ─── ARASAAC pictogram zoeken ─────────────────────────────────────────────────
 
+def _arasaac_search(term: str, language: str) -> str:
+    """Zoek één term via ARASAAC. Geeft URL terug of lege string."""
+    resp = requests.get(
+        f"https://api.arasaac.org/v1/pictograms/{language}/search/{requests.utils.quote(term)}",
+        timeout=8,
+    )
+    resp.raise_for_status()
+    results = resp.json()
+    if not results:
+        return ""
+    return f"https://api.arasaac.org/v1/pictograms/{results[0]['_id']}"
+
+
 def find_icon(hint: str, language: str = "nl") -> str:
-    """Zoek een pictogram via ARASAAC. Geeft de afbeeldings-URL terug of lege string."""
-    if not hint.strip():
+    """Zoek een pictogram via ARASAAC.
+    Strategie: probeer de volledige hint, daarna elk los woord als fallback.
+    """
+    hint = hint.strip()
+    if not hint:
         return ""
+
+    # Probeer de volledige hint eerst
     try:
-        resp = requests.get(
-            f"https://api.arasaac.org/v1/pictograms/{language}/search/{hint}",
-            timeout=8,
-        )
-        resp.raise_for_status()
-        results = resp.json()
-        if not results:
-            return ""
-        pic_id = results[0]["_id"]
-        return f"https://api.arasaac.org/v1/pictograms/{pic_id}"
-    except Exception as e:
-        print(f"  [icon] Zoekfout voor '{hint}': {e}")
-        return ""
+        url = _arasaac_search(hint, language)
+        if url:
+            print(f"  [icon] '{hint}' → {url}")
+            return url
+    except Exception:
+        pass
+
+    # Fallback: probeer elk woord afzonderlijk (meest specifieke eerst)
+    words = [w for w in hint.split() if len(w) > 2]
+    for word in words:
+        try:
+            url = _arasaac_search(word, language)
+            if url:
+                print(f"  [icon] '{hint}' → fallback '{word}' → {url}")
+                return url
+        except Exception:
+            pass
+
+    print(f"  [icon] '{hint}' → geen resultaat")
+    return ""
 
 
 def enrich_with_icons(result: dict, language: str = "nl") -> dict:
@@ -618,7 +643,7 @@ def process_job(cfg: configparser.ConfigParser, php_url: str, api_key: str, job:
                     hint = opt.get("image_query") or opt.get("image_hint", "")
                     opt["image_url"] = find_icon(hint, language)
             submit_result(php_url, api_key, job_id, result)
-            print(f"  ✓ Job #{job_id} klaar ({len(result['options'])} opties, complete={result['is_complete']})")
+            print(f"  ✓ Job #{job_id} klaar ({len(result['options'])} opties, gok={result.get('has_guess', False)})")
 
         elif job_type == "discovery":
             result = _generate_discovery(cfg)
